@@ -1,0 +1,57 @@
+langchain>=1.4.0,<2.0.0
+langgraph>=1.2.0,<2.0.0
+requests>=2.31.0
+
+
+# for AWS BedRock Provider Hosted LLMs
+langchain-aws>=1.8.0,<2.0.0
+strands-agents>=1.60.0,<2.0.0
+boto3>=1.40.0
+
+# for Groq Provider Hosted LLMs
+langchain-groq>=1.1.0,<2.0.0
+strands-agents[openai]>=1.60.0,<2.0.0
+python-dotenv>=1.0.0
+
+
+# For Inbuilt Tools
+strands-agents-tools>=0.8.9,<0.9.0
+
+
+# For AWS BedRock Provider Hosted LLMs Memory via Strands SDK
+strands-agents-tools[mem0-memory]>=0.8.9,<0.9.0
+faiss-cpu>=1.8.0
+ddgs>=9.0.0
+
+
+# For Groq Provider Hosted LLMs Memory via Strands SDK
+# Mem0 extracts facts with a Groq model ...
+groq>=0.30.0
+# ... and embeds them locally (Groq has no embeddings API): fastembed, wrapped as a LangChain Embeddings
+fastembed>=0.5.0
+langchain>=1.4.0,<2.0.0
+
+
+# For Both Groq & AWS Bedrock Models
+# In Groq, AgentCore Memory still needs AWS credentials, but no Bedrock model access
+boto3>=1.40.0
+langchain>=1.4.0,<2.0.0
+langchain-core>=1.6.0,<2.0.0
+langchain-groq>=1.1.0,<2.0.0
+langgraph>=1.2.0,<2.0.0
+langgraph-checkpoint-aws>=1.2.0,<2.0.0
+bedrock-agentcore>=1.24.0,<2.0.0
+
+
+# For Vector Store
+chromadb>=1.0.0
+
+# For UI
+gradio>=5.0.0
+
+# For LangChain integrations
+langchain-huggingface>=0.1.0
+langchain-openai>=0.3.0
+
+# For HuggingFace embeddings
+sentence-transformers>=3.0.0
