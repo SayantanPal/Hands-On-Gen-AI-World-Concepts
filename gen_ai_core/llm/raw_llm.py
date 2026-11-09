@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import sys
 import time
-from typing import Any
+from typing import Any, Callable
 
 from config.settings import Settings, _env, get_settings
 from gen_ai_core.models.result import LLMResult
@@ -11,7 +12,17 @@ from gen_ai_core.prompts.prompt import Prompt
 
 class RawLLM:
 
-    def __init__(self, settings: Settings | None = None):
+    def __init__(self, settings: Settings | None = None,
+                 tools: list[dict[str, Any]] | None = None):
+        """
+        Args:
+            settings: Optional Settings override.
+            tools:    Optional list of tool dicts, each with keys:
+                      - name:        str — tool function name
+                      - description: str — what the tool does
+                      - parameters:  dict — JSON Schema of the arguments
+                      - function:    Callable — the actual Python function to execute
+        """
         self.s = settings or get_settings()
         self._provider = self.s.llm_provider
         self._model: str | None = self.s.default_llm
@@ -19,6 +30,10 @@ class RawLLM:
         self._max_tokens = self.s.max_tokens or 700
         self._reasoning_effort = self.s.reasoning_effort
         self._client: Any = None
+        self._tools = tools or []
+        self._tool_map: dict[str, Callable] = {
+            t["name"]: t["function"] for t in self._tools
+        }
         self._build_sdk_client_and_init_model_from_llm_provider()
         print(f"Raw LLM SDK: provider={self._provider}  model={self._model}")
         if self._provider == "none":
@@ -151,6 +166,38 @@ class RawLLM:
     def __repr__(self) -> str:
         return f"RawLLM({self._provider}:{self._model})" if self.is_sdk_client_available else "RawLLM(none)"
 
+
+    def _openai_tool_defs(self) -> list[dict]:
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["parameters"],
+                },
+            }
+            for t in self._tools
+        ]
+
+    def _anthropic_tool_defs(self) -> list[dict]:
+        return [
+            {
+                "name": t["name"],
+                "description": t["description"],
+                "input_schema": t["parameters"],
+            }
+            for t in self._tools
+        ]
+
+    def _execute_tool(self, name: str, arguments: dict) -> str:
+        fn = self._tool_map.get(name)
+        if fn is None:
+            return json.dumps({"error": f"Unknown tool: {name}"})
+        result = fn(**arguments)
+        return result if isinstance(result, str) else json.dumps(result)
+
+
     def generate_response_content(self, prompt: Prompt, *, json_mode: bool = False,
                  max_tokens: int | None = None, temperature: float | None = None) -> LLMResult:
         if not self.is_sdk_client_available:
@@ -181,6 +228,8 @@ class RawLLM:
             kwargs["temperature"] = temperature
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
+        if self._tools:
+            kwargs["tools"] = self._openai_tool_defs()
 
         if self._provider == "sap":
             kwargs.pop("model")
@@ -198,13 +247,43 @@ class RawLLM:
             )
 
         resp = self._client.chat.completions.create(**kwargs)
+        msg = resp.choices[0].message
+        tool_calls_log: list[dict] = []
+
+        if msg.tool_calls and self._tools:
+            assistant_msg: dict[str, Any] = {"role": "assistant", "content": msg.content or ""}
+            assistant_msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in msg.tool_calls
+            ]
+            messages = kwargs["messages"] + [assistant_msg]
+            for tc in msg.tool_calls:
+                fn_name = tc.function.name
+                fn_args = json.loads(tc.function.arguments)
+                result = self._execute_tool(fn_name, fn_args)
+                tool_calls_log.append({"name": fn_name, "args": fn_args, "result": result})
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                })
+            kwargs["messages"] = messages
+            kwargs.pop("tools", None)
+            resp = self._client.chat.completions.create(**kwargs)
+            msg = resp.choices[0].message
+
         usage = getattr(resp, "usage", None)
         return LLMResult(
-            (resp.choices[0].message.content or "").strip(),
+            (msg.content or "").strip(),
             getattr(usage, "prompt_tokens", 0) or 0,
             getattr(usage, "completion_tokens", 0) or 0,
             (time.perf_counter() - t0) * 1000,
             self._model, self._provider,
+            tool_calls=tool_calls_log,
         )
 
     
@@ -220,15 +299,42 @@ class RawLLM:
         }
         if temperature is not None:
             kwargs["temperature"] = temperature
+        if self._tools:
+            kwargs["tools"] = self._anthropic_tool_defs()
+
         resp = self._client.messages.create(**kwargs)
+        tool_calls_log: list[dict] = []
+
+        tool_use_blocks = [b for b in resp.content if b.type == "tool_use"]
+        if tool_use_blocks and self._tools:
+            tool_results = []
+            for tb in tool_use_blocks:
+                result = self._execute_tool(tb.name, tb.input)
+                tool_calls_log.append({"name": tb.name, "args": tb.input, "result": result})
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tb.id,
+                    "content": result,
+                })
+            kwargs["messages"] = [
+                {"role": "user", "content": user},
+                {"role": "assistant", "content": [b.model_dump() for b in resp.content]},
+                {"role": "user", "content": tool_results},
+            ]
+            kwargs.pop("tools", None)
+            resp = self._client.messages.create(**kwargs)
+
         text = "".join(getattr(b, "text", "") for b in resp.content)
         return LLMResult(
             text.strip(), resp.usage.input_tokens, resp.usage.output_tokens,
             (time.perf_counter() - t0) * 1000, self._model, "anthropic",
+            tool_calls=tool_calls_log,
         )
 
     
     def _gen_gemini(self, prompt: Prompt, json_mode: bool = False, t0: float = time.perf_counter(), max_tokens: int | None = None, temperature: float | None = None) -> LLMResult:
+        from google.genai import types as gtypes
+
         cfg: dict[str, Any] = {}
         if json_mode:
             cfg["response_mime_type"] = "application/json"
@@ -236,8 +342,48 @@ class RawLLM:
             cfg["max_output_tokens"] = max_tokens
         if temperature is not None:
             cfg["temperature"] = temperature
+        if self._tools:
+            cfg["tools"] = [gtypes.Tool(function_declarations=[
+                gtypes.FunctionDeclaration(
+                    name=t["name"],
+                    description=t["description"],
+                    parameters=t["parameters"],
+                )
+                for t in self._tools
+            ])]
+
         contents = prompt.system_text() + "\n\n" + prompt.user_query
-        resp = self._client.models.generate_content(model=self._model, contents=contents, config=cfg or None)
+        resp = self._client.models.generate_content(
+            model=self._model, contents=contents, config=cfg or None,
+        )
+        tool_calls_log: list[dict] = []
+
+        fn_calls = [
+            p for p in (resp.candidates[0].content.parts or [])
+            if p.function_call is not None
+        ] if resp.candidates else []
+
+        if fn_calls and self._tools:
+            tool_parts = []
+            for fc_part in fn_calls:
+                fc = fc_part.function_call
+                fn_args = dict(fc.args) if fc.args else {}
+                result_str = self._execute_tool(fc.name, fn_args)
+                tool_calls_log.append({"name": fc.name, "args": fn_args, "result": result_str})
+                result_dict = json.loads(result_str) if result_str.startswith("{") else {"result": result_str}
+                tool_parts.append(gtypes.Part.from_function_response(
+                    name=fc.name, response=result_dict,
+                ))
+            history = [
+                gtypes.Content(parts=[gtypes.Part.from_text(text=contents)], role="user"),
+                resp.candidates[0].content,
+                gtypes.Content(parts=tool_parts, role="user"),
+            ]
+            cfg.pop("tools", None)
+            resp = self._client.models.generate_content(
+                model=self._model, contents=history, config=cfg or None,
+            )
+
         um = getattr(resp, "usage_metadata", None)
         return LLMResult(
             (resp.text or "").strip(),
@@ -245,4 +391,5 @@ class RawLLM:
             getattr(um, "candidates_token_count", 0) or 0,
             (time.perf_counter() - t0) * 1000,
             self._model, "gemini",
+            tool_calls=tool_calls_log,
         )

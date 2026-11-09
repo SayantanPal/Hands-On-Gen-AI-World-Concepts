@@ -8,17 +8,22 @@ from langchain_core.prompts import ChatPromptTemplate
 
 
 class LangChainLLM:
-    def __init__(self, settings: Settings | None = None, tools: list[Any] | None = None):
+    def __init__(self, settings: Settings | None = None, 
+                 tools: list[Any] | None = None,
+                 provider: str | None = None, model: str | None = None):
         self.s = settings or get_settings()
-        self._provider = self.s.llm_provider
-        self._model = self.s.default_llm
+        self._provider = provider or self.s.llm_provider
+        self._model = model or self.s.default_llm
         self._llm: Any = None
         self._tools = tools
         self._llm_temperature: float = self.s.llm_temperature or 0.0
-        self._build_model_from_llm_provider()
-        print(f"Langchain Wrapper SDK: provider={self._provider}  model={self._llm}")
         if self._provider == "none":
             print("\n[LangChain SDK] skipped — no provider configured (set .env)")
+        if self._model == "none":
+            print("\n[LangChain SDK] skipped — no model configured (set .env)")
+        else:
+            self._build_model_from_llm_provider()
+            print(f"Langchain Wrapper SDK: provider={self._provider}  model={self._model}")
 
     # def __repr__(self) -> str:
     #     return f"LangChainLLM({self._provider}:{self._model})" if self._model else "LangChainLLM(none)"
@@ -58,6 +63,11 @@ class LangChainLLM:
         resp = self._llm.invoke(prompt.to_lc_messages())
         return getattr(resp, "text", None) or resp.content
 
+    '''
+        lets you define reusable prompt templates with named variables, 
+        then fill them with different data each time 
+        — useful when you have structured/computed data to inject
+    '''
     def chain(self, prompt: ChatPromptTemplate) -> Any:
         from langchain_core.output_parsers import StrOutputParser
         return prompt | self._llm | StrOutputParser()

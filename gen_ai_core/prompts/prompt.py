@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from gen_ai_core.prompts.rctfc_template import build_rctfc_system_prompt
+
 
 @dataclass
 class Prompt:
@@ -16,19 +18,16 @@ class Prompt:
     user_query: str = ""
 
     def system_text(self) -> str:
-        parts = [f"[ROLE]\nYou are {self.role}."]
-        if self.context:
-            parts.append(f"[CONTEXT]\n{self.context}")
-        if self.task:
-            parts.append(f"[TASK]\n{self.task}")
-        if self.output_format:
-            parts.append(f"[FORMAT]\n{self.output_format}")
-        if self.constraints:
-            rules = "\n".join(f"- {c}" for c in self.constraints)
-            parts.append(f"[GUARDRAILS CONSTRAINTS]\n{rules}")
+        base = build_rctfc_system_prompt(
+            role=self.role,
+            task=self.task,
+            context=self.context,
+            output_format=self.output_format,
+            constraints=self.constraints or None,
+        )
         if self.rag_context:
-            parts.append(f"[RETRIEVED CONTEXT — answer using ONLY this when relevant]\n{self.rag_context}")
-        return "\n\n".join(parts)
+            base += f"\n\n[RETRIEVED CONTEXT — answer using ONLY this when relevant]\n{self.rag_context}"
+        return base
 
     def to_role_dicts(self) -> list[dict[str, str]]:
         msgs = [{"role": "system", "content": self.system_text()}]
