@@ -1,0 +1,4 @@
+place_id*,travel_mode,travel_cost_per_person,daily_spend_per_person
+GOA,Overnight train,2800,1500
+COORG,Bus,1000,1100
+MANALI,Flight + bus,9000,1300
