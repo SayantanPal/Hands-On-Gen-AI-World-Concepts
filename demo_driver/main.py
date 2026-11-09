@@ -1,7 +1,15 @@
 from gen_ai_core import HARDENED_TRAVEL, LangChainLLM, Prompt, RawLLM, get_settings
+from demo_driver.check_llm_setup import check_raw_llm_setup, check_langchain_llm_setup, check_python_version
 
 # Run with: uv run --active python demo_driver/main.py
 def main() -> None:
+    check_python_version()
+    print("\n")
+    check_raw_llm_setup()
+    print("\n")
+    check_langchain_llm_setup()
+    print("\n")
+    
     # (a) Raw layer — plain unhardened question
     raw_llm = RawLLM()
     print("\n[Raw SDK]", raw_llm)
