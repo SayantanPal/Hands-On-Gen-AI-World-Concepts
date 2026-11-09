@@ -14,6 +14,11 @@ class LangChainLLM:
         self._tools = tools
         self._llm_temperature: float = self.s.llm_temperature or 0.0
         self._model = self._build_model()
+        print(f"Langchain Wrapper SDK: provider={self._provider}  model={self._model}")
+
+    # def __repr__(self) -> str:
+    #     return f"LangChainLLM({self._provider}:{self._model})" if self._model else "LangChainLLM(none)"
+
 
     def _build_model(self) -> Any:
         p, m = self._provider, self._llm

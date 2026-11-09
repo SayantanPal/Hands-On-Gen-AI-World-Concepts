@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+import os, sys
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -21,15 +21,10 @@ def _env_float(name: str, default: float | None) -> float | None:
     except ValueError:
         return default
 
-DEFAULT_MODELS: dict[str, str] = {
-    "openai":    "gpt-6-luna", # cheap, fast OpenAI model (replaces gpt-4.1-mini / gpt-4o-mini)
-    "groq":      "openai/gpt-oss-120b",
-    "ollama":    "llama3.1:8b", # "llama3.2", # any model you have pulled locally with `ollama pull`
-    "anthropic": "claude-haiku-5-5", # cheap, fast Anthropic model
-    "gemini":    "gemini-2.5-flash",
-    "sap":       "gpt-4o",
-}
 
+# Detect: api keys -(auto)-> api provider -(auto/default)-> llm model
+
+# provides api provider from api keys
 def _auto_provider() -> str:
     explicit = _env("LLM_PROVIDER").lower()
     if explicit:
@@ -46,11 +41,21 @@ def _auto_provider() -> str:
         return "gemini"
     return "none"
 
+# provides default models from api providers
+DEFAULT_MODELS: dict[str, str] = {
+    "openai":    "gpt-6-luna", # cheap, fast OpenAI model (replaces gpt-4.1-mini / gpt-4o-mini)
+    "groq":      "openai/gpt-oss-120b",
+    "ollama":    "llama3.1:8b", # "llama3.2", # any model you have pulled locally with `ollama pull`
+    "anthropic": "claude-haiku-5-5", # cheap, fast Anthropic model
+    "gemini":    "gemini-2.5-flash",
+    "sap":       "gpt-4o",
+}
 
 @dataclass
 class Settings:
     # ---- LLM --------------------------------------------------------------
-    llm_provider: str = field(default_factory=_auto_provider)
+    # If llm provider vendor is explicitly not provided, detect it from api keys using _auto_provider
+    llm_provider: str = "ollama" if "--local" in sys.argv else field(default_factory=_auto_provider)
     default_llm: str = field(default_factory=lambda: _env("LLM_MODEL"))
     llm_temperature: float | None = field(default_factory=lambda: _env_float("LLM_TEMPERATURE", None))
     max_tokens: int = field(default_factory=lambda: int(_env("LLM_MAX_TOKENS", "700")))
@@ -58,6 +63,7 @@ class Settings:
     openai_base_url: str = field(default_factory=lambda: _env("OPENAI_BASE_URL"))
 
     def __post_init__(self) -> None:
+        # IF default LLM model is explicitly not provided, detect it from llm provider vendor
         if not self.default_llm and self.llm_provider in DEFAULT_MODELS:
             self.default_llm = DEFAULT_MODELS[self.llm_provider]
 

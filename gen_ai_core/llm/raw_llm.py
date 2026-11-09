@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import time
 from typing import Any
 
@@ -18,7 +19,10 @@ class RawLLM:
         self._max_tokens = self.s.max_tokens or 700
         self._reasoning_effort = self.s.reasoning_effort
         self._client: Any = None
-        # self._build_sdk_client_and_init_model_from_llm_provider()
+        self._build_sdk_client_and_init_model_from_llm_provider()
+        print(f"Raw LLM SDK: provider={self._provider}  model={self._model}")
+        if self._provider == "none":
+            print("\n[Raw SDK] skipped — no provider configured (set .env)")
 
 
     def _build_sdk_client_and_init_model_from_llm_provider(self) -> None:
@@ -27,48 +31,48 @@ class RawLLM:
         if p in {"openai", "groq", "ollama"}:
             from openai import OpenAI
             if p == "groq":
-                default_groq_llm = "openai/gpt-oss-120b"
-                print(f"Using Default Groq LLM: {default_groq_llm}" if not _env("GROQ_LLM") else f"Using Groq LLM: {_env("GROQ_LLM")}")                               
-                self._model = _env("GROQ_LLM") or default_groq_llm
+                # default_groq_llm = "openai/gpt-oss-120b"
+                # print(f"Using Default Groq LLM: {default_groq_llm}" if not _env("GROQ_LLM") else f"Using Groq LLM: {_env("GROQ_LLM")}")                               
+                # self._model = _env("GROQ_LLM") or default_groq_llm
                 self._client = OpenAI(
                     base_url= _env("GROQ_OPENAI_BASE_URL") or "https://api.groq.com/openai/v1",
                     api_key= _env("GROQ_API_KEY"),
                 )
             elif p == "ollama":
-                default_ollama_llm = "llama3.1:8b"
-                print(f"Using Default Ollama LLM: {default_ollama_llm}" if not _env("OLLAMA_LLM") else f"Using Ollama LLM: {_env("OLLAMA_LLM")}")
-                self._model = _env("OLLAMA_LLM") or default_ollama_llm
+                # default_ollama_llm = "llama3.1:8b"
+                # print(f"Using Default Ollama LLM: {default_ollama_llm}" if not _env("OLLAMA_LLM") else f"Using Ollama LLM: {_env("OLLAMA_LLM")}")
+                # self._model = _env("OLLAMA_LLM") or default_ollama_llm
                 self._client = OpenAI(
                     base_url= _env("OLLAMA_LOCAL_BASE_URL") or "http://localhost:11434/v1", 
                     api_key="ollama"
                 )
             elif p == "openai":
-                default_openai_llm = "gpt-6-luna"
-                print(f"Using Default OpenAI LLM: {default_openai_llm}" if not _env("OPENAI_LLM") else f"Using OpenAI LLM: {_env("OPENAI_LLM")}")
-                self._model = _env("OPENAI_LLM") or default_openai_llm
+                # default_openai_llm = "gpt-6-luna"
+                # print(f"Using Default OpenAI LLM: {default_openai_llm}" if not _env("OPENAI_LLM") else f"Using OpenAI LLM: {_env("OPENAI_LLM")}")
+                # self._model = _env("OPENAI_LLM") or default_openai_llm
                 self._client = OpenAI(
                     base_url= _env("OPENAI_BASE_URL") or None
                 )
 
         elif p == "gemini":
+                    # default_gemini_llm = "gemini-2.5-flash"
+                    # print(f"Using Default Gemini LLM: {default_gemini_llm}" if not _env("GEMINI_LLM") else f"Using Gemini LLM: {_env("GEMINI_LLM")}")
+                    # self._model = _env("GEMINI_LLM") or default_gemini_llm
                     from google import genai
-                    default_gemini_llm = "gemini-2.5-flash"
-                    print(f"Using Default Gemini LLM: {default_gemini_llm}" if not _env("GEMINI_LLM") else f"Using Gemini LLM: {_env("GEMINI_LLM")}")
-                    self._model = _env("GEMINI_LLM") or default_gemini_llm
                     self._client = genai.Client(api_key=_env("GOOGLE_API_KEY"))
 
         elif p == "anthropic":
+            # default_anthropic_llm = "claude-sonnet-4-6"
+            # print(f"Using Default Anthropic LLM: {default_anthropic_llm}" if not _env("ANTHROPIC_LLM") else f"Using Anthropic LLM: {_env("ANTHROPIC_LLM")}")
+            # self._model = _env("ANTHROPIC_LLM") or default_anthropic_llm
             import anthropic
-            default_anthropic_llm = "claude-sonnet-4-6"
-            print(f"Using Default Anthropic LLM: {default_anthropic_llm}" if not _env("ANTHROPIC_LLM") else f"Using Anthropic LLM: {_env("ANTHROPIC_LLM")}")
-            self._model = _env("ANTHROPIC_LLM") or default_anthropic_llm
             self._client = anthropic.Anthropic()
 
         elif p == "sap":
+            # default_sap_llm = "sap-1"
+            # print(f"Using Default SAP LLM: {default_sap_llm}" if not _env("SAP_LLM") else f"Using SAP LLM: {_env("SAP_LLM")}")
+            # self._model = _env("SAP_LLM") or default_sap_llm
             from gen_ai_hub.proxy.native.openai import chat as sap_chat
-            default_sap_llm = "sap-1"
-            print(f"Using Default SAP LLM: {default_sap_llm}" if not _env("SAP_LLM") else f"Using SAP LLM: {_env("SAP_LLM")}")
-            self._model = _env("SAP_LLM") or default_sap_llm
             self._client = sap_chat
 
         elif p in {"none", "", None}:
@@ -82,10 +86,10 @@ class RawLLM:
         print("Detecting SDK client from provided API Keys")
         groq_key = _env("GROQ_API_KEY")
         if groq_key:
+            # self._provider = "groq"
+            # default_groq_llm = "openai/gpt-oss-120b"
+            # self._model = _env("GROQ_LLM") or default_groq_llm
             from openai import OpenAI
-            self._provider = "groq"
-            default_groq_llm = "openai/gpt-oss-120b"
-            self._model = _env("GROQ_LLM") or default_groq_llm
             self._client = OpenAI(
                 base_url=_env("GROQ_OPENAI_BASE_URL") or "https://api.groq.com/openai/v1",
                 api_key=groq_key,
@@ -95,11 +99,11 @@ class RawLLM:
 
         ollama_url = _env("OLLAMA_LOCAL_BASE_URL") or "http://localhost:11434/v1"
         try:
-            import urllib.request
-            urllib.request.urlopen(ollama_url.replace("/v1", ""), timeout=1)
-            from openai import OpenAI
-            self._provider = "ollama"
-            self._model = _env("OLLAMA_LLM") or "llama3.1:8b"
+            # import urllib.request
+            # urllib.request.urlopen(ollama_url.replace("/v1", ""), timeout=1)
+            # from openai import OpenAI
+            # self._provider = "ollama"
+            # self._model = _env("OLLAMA_LLM") or "llama3.1:8b"
             self._client = OpenAI(base_url=ollama_url, api_key="ollama")
             print(f"Auto-detected provider: ollama (model: {self._model})")
             return
@@ -108,30 +112,30 @@ class RawLLM:
 
         google_key = _env("GOOGLE_API_KEY")
         if google_key:
-            from google import genai
-            self._provider = "gemini"
-            default_gemini_llm = "gemini-2.5-flash"
-            self._model = _env("GEMINI_LLM") or default_gemini_llm
+            # from google import genai
+            # self._provider = "gemini"
+            # default_gemini_llm = "gemini-2.5-flash"
+            # self._model = _env("GEMINI_LLM") or default_gemini_llm
             self._client = genai.Client(api_key=google_key)
             print(f"Auto-detected provider: gemini (model: {self._model})")
             return
         
         openai_key = _env("OPENAI_API_KEY")
         if openai_key:
+            # self._provider = "openai"
+            # default_openai_llm = "gpt-6-luna"
+            # self._model = _env("OPENAI_LLM") or default_openai_llm
             from openai import OpenAI
-            self._provider = "openai"
-            default_openai_llm = "gpt-6-luna"
-            self._model = _env("OPENAI_LLM") or default_openai_llm
             self._client = OpenAI(base_url=_env("OPENAI_BASE_URL") or None, api_key=openai_key)
             print(f"Auto-detected provider: openai (model: {self._model})")
             return
 
         anthropic_key = _env("ANTHROPIC_API_KEY")
         if anthropic_key:
+            # self._provider = "anthropic"
+            # default_anthropic_llm = "claude-sonnet-4-6"
+            # self._model = _env("ANTHROPIC_LLM") or default_anthropic_llm
             import anthropic
-            self._provider = "anthropic"
-            default_anthropic_llm = "claude-sonnet-4-6"
-            self._model = _env("ANTHROPIC_LLM") or default_anthropic_llm
             self._client = anthropic.Anthropic(api_key=anthropic_key)
             print(f"Auto-detected provider: anthropic (model: {self._model})")
             return
