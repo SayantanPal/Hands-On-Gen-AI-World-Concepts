@@ -1,4 +1,11 @@
-place_id*,name,trip_type,best_months
-GOA,Goa,Beach,Nov–Feb
-COORG,Coorg,Hills,Oct–Jun
-MANALI,Manali,Hills,Mar–Jun
+place_id*,name,trip_type,state,best_months
+GOA,Goa,Beach,Goa,Nov–Feb
+GOKARNA,Gokarna,Beach,Karnataka,Oct–Mar
+PONDY,Pondicherry,Beach,Puducherry,Oct–Mar
+COORG,Coorg,Hills,Karnataka,Oct–Jun
+OOTY,Ooty,Hills,Tamil Nadu,Mar–Jun
+MANALI,Manali,Hills,Himachal Pradesh,Mar–Jun
+HAMPI,Hampi,Heritage,Karnataka,Oct–Feb
+JAIPUR,Jaipur,Heritage,Rajasthan,Oct–Mar
+RISHIKESH,Rishikesh,Adventure,Uttarakhand,Oct–Jun
+DANDELI,Dandeli,Adventure,Karnataka,Oct–May

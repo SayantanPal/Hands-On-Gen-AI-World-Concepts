@@ -28,7 +28,7 @@ Usage as a library (from consumer code):
 
 Run directly to see all operations in action:
 
-    python -m local_demo_db.sqlite_demo_db
+    uv run --active python -m local_demo_db.sqlite_demo_db
 """
 
 from __future__ import annotations
@@ -277,8 +277,8 @@ class SQLiteDemoDB:
         # ── WRITE: INSERT a new destination ──
         print("\n── execute: INSERT a new place (Pondicherry) ──")
         self.execute(
-            "INSERT OR IGNORE INTO places VALUES (?,?,?,?)",
-            ("PONDI", "Pondicherry", "Beach", "Oct–Mar"),
+            "INSERT OR IGNORE INTO places VALUES (?,?,?,?,?)",
+            ("PONDI", "Pondicherry", "Beach", "Puducherry", "Oct–Mar"),
         )
         self.execute(
             "INSERT OR IGNORE INTO stays VALUES (?,?,?)",
@@ -325,30 +325,43 @@ class SQLiteDemoDB:
             cur = self._conn.cursor()
             cur.executescript("""
             CREATE TABLE IF NOT EXISTS places (
-                place_id TEXT PRIMARY KEY, name TEXT, trip_type TEXT, best_months TEXT
+                place_id TEXT PRIMARY KEY, name TEXT, trip_type TEXT, state TEXT, best_months TEXT
             );
             CREATE TABLE IF NOT EXISTS stays (
-                place_id TEXT PRIMARY KEY, stay_name TEXT, room_price_per_night REAL
+                place_id TEXT PRIMARY KEY, stay_name TEXT, room_price_per_night REAL,
+                FOREIGN KEY (place_id) REFERENCES places(place_id)
             );
             CREATE TABLE IF NOT EXISTS costs (
                 place_id TEXT PRIMARY KEY, travel_mode TEXT,
-                travel_cost_per_person REAL, daily_spend_per_person REAL
+                travel_cost_per_person REAL, daily_spend_per_person REAL,
+                FOREIGN KEY (place_id) REFERENCES places(place_id)
             );
             """)
-            cur.executemany("INSERT OR IGNORE INTO places VALUES (?,?,?,?)", [
-                ("GOA",    "Goa",    "Beach", "Nov–Feb"),
-                ("COORG",  "Coorg",  "Hills", "Oct–Jun"),
-                ("MANALI", "Manali", "Hills", "Mar–Jun"),
+            cur.executemany("INSERT OR IGNORE INTO places VALUES (?,?,?,?,?)", [
+                ("GOA",       "Goa",         "Beach",     "Goa",              "Nov–Feb"),
+                ("GOKARNA",   "Gokarna",     "Beach",     "Karnataka",        "Oct–Mar"),
+                ("PONDY",     "Pondicherry", "Beach",     "Puducherry",       "Oct–Mar"),
+                ("COORG",     "Coorg",       "Hills",     "Karnataka",        "Oct–Jun"),
+                ("OOTY",      "Ooty",        "Hills",     "Tamil Nadu",       "Mar–Jun"),
+                ("MANALI",    "Manali",      "Hills",     "Himachal Pradesh", "Mar–Jun"),
+                ("HAMPI",     "Hampi",       "Heritage",  "Karnataka",        "Oct–Feb"),
+                ("JAIPUR",    "Jaipur",      "Heritage",  "Rajasthan",        "Oct–Mar"),
+                ("RISHIKESH", "Rishikesh",   "Adventure", "Uttarakhand",      "Oct–Jun"),
+                ("DANDELI",   "Dandeli",     "Adventure", "Karnataka",        "Oct–May"),
             ])
             cur.executemany("INSERT OR IGNORE INTO stays VALUES (?,?,?)", [
-                ("GOA",    "Sea Breeze Guesthouse", 3000),
-                ("COORG",  "Coffee Estate Cottage", 2800),
-                ("MANALI", "Old Manali Cafe Stay",  2500),
+                ("GOA",       "Sea Breeze Guesthouse",   3000), ("GOKARNA", "Om Beach Huts",          1800),
+                ("PONDY",     "French Quarter Homestay", 2500), ("COORG",   "Coffee Estate Cottage",  2800),
+                ("OOTY",      "Nilgiri View Lodge",      2200), ("MANALI",  "Old Manali Cafe Stay",   2500),
+                ("HAMPI",     "Boulder View Guesthouse", 1500), ("JAIPUR",  "Pink City Haveli",       2400),
+                ("RISHIKESH", "Ganga Riverside Camp",    1600), ("DANDELI", "Jungle River Camp",      2000),
             ])
             cur.executemany("INSERT OR IGNORE INTO costs VALUES (?,?,?,?)", [
-                ("GOA",    "Overnight train", 2800, 1500),
-                ("COORG",  "Bus",             1000, 1100),
-                ("MANALI", "Flight + bus",    9000, 1300),
+                ("GOA",       "Overnight train", 2800, 1500), ("GOKARNA", "Overnight bus",   1200,  900),
+                ("PONDY",     "Bus",             1400, 1200), ("COORG",   "Bus",             1000, 1100),
+                ("OOTY",      "Bus",             1000, 1000), ("MANALI",  "Flight + bus",    9000, 1300),
+                ("HAMPI",     "Overnight train",  900,  800), ("JAIPUR",  "Flight",          7500, 1200),
+                ("RISHIKESH", "Flight + cab",    8500, 1400), ("DANDELI", "Bus",             1100, 1600),
             ])
             self._conn.commit()
 
@@ -396,7 +409,7 @@ def connect_to_database(path: str | Path = _DEFAULT_DB,
 
 if __name__ == "__main__":
     db = connect_to_database()
+    db.demo_raw_db_operations()
     db.demo_raw_db_operations_2()
     db.drop_tables("costs", "stays", "places")  # as many as needed
-    db.demo_raw_db_operations()
     db.close()

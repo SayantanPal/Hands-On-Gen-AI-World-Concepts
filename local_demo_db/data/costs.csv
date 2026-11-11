@@ -1,4 +1,11 @@
 place_id*,travel_mode,travel_cost_per_person,daily_spend_per_person
 GOA,Overnight train,2800,1500
+GOKARNA,Overnight bus,1200,900
+PONDY,Bus,1400,1200
 COORG,Bus,1000,1100
+OOTY,Bus,1000,1000
 MANALI,Flight + bus,9000,1300
+HAMPI,Overnight train,900,800
+JAIPUR,Flight,7500,1200
+RISHIKESH,Flight + cab,8500,1400
+DANDELI,Bus,1100,1600
