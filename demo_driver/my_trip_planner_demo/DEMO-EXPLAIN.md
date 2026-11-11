@@ -14,8 +14,9 @@ Toggle any of them in `main()`.
 | `demo_react_loop_v2` | `RawLLM` · `invoke_with_multiple_tools_in_agentic_react_loop` | multi-round loop | ✅ solved | same loop, now **packaged on the class** |
 | `demo_react_loop_langchain` | `LangChainLLM` (+ manual `bind_tools`) via `react_loop_langchain()` | multi-round loop | ✅ solved | the ReAct loop spelled out by hand (LangChain) |
 | `demo_react_loop_langchain_v2` | `LangChainLLM` · `invoke_with_multiple_tools_in_agentic_react_loop` | multi-round loop | ✅ solved | same loop, now **packaged on the class** |
-| `demo_prompt_template_chain` | `LangChainLLM` · `chain()` | **none** (Python computes) | n/a (Goa only) | `chain()` text pipe — model only writes prose |
-| `demo_prompt_template_chain_v2` | `LangChainLLM` · `invoke_with_tools` (bind only `compute_trip_cost`) | single grounded round | n/a (Goa only) | pre-resolve the fetch in Python → one reliable tool round |
+| `demo_prompt_template_chain_with_manual_tool_calling` | `LangChainLLM` · `chain()` | **none** (Python computes) | n/a (Goa only) | `chain()` text pipe — model only writes prose |
+| `demo_prompt_template_chain_with_llm_implicit_tool_calling` | `LangChainLLM` · `invoke_with_tools` (bind only `compute_trip_cost`) | single grounded round | n/a (Goa only) | pre-resolve the fetch in Python → one reliable tool round |
+| `demo_prompt_template_chain_with_llm_implicit_tool_calling_and_with_manual_seq_pipeline_cascading` | two `LangChainLLM` calls in sequence (stage-1 `invoke_with_tools` w/ tool → stage-2 `invoke_with_tools` no tool) | stage 1: one grounded round · stage 2: none | n/a (Goa only) | **cascading pipeline** — stage-1's answer becomes stage-2's input |
 
 ## The three questions
 
@@ -39,6 +40,39 @@ The `*_v2` demos prove the hand-rolled loops (`react_loop` / `react_loop_langcha
 | Result | identical | identical |
 
 Both v1 and v2 are kept on purpose: v1 is the "see every message and API call" teaching version; v2 is the packaged reuse you'd actually ship.
+
+## Cascading pipeline — chaining two LLM calls
+
+`demo_prompt_template_chain_with_llm_implicit_tool_calling_and_with_manual_seq_pipeline_cascading`
+shows a different shape from everything above: instead of fixing *one* question, it runs **two
+LLM stages in sequence**, wiring the first's output into the second's input — a manual
+prompt-chain (cascade).
+
+```
+DB fetch (Python)
+      │
+      ▼
+Stage 1  LangChainLLM(tools=[compute_trip_cost]).invoke_with_tools(...)
+         → model calls the tool, returns a cost breakdown + "COST_PER_PERSON: <n>"
+      │   result["text"]  ──────────────────────────────┐
+      ▼                                                  │ (handoff)
+Stage 2  LangChainLLM().invoke_with_tools(...)   ← NO tools (pure judgment)
+         prompt contains {budget_cost_breakdown} = stage-1's text
+         → model replies "GO" / "NOT YET" + one suggested change
+```
+
+Key points for a learner:
+
+- **Different roles per stage.** Stage 1 is "trip planner" *with* a tool; stage 2 is the
+  "money-minded friend" *with no tool*. Each stage is its own `LangChainLLM` with its own
+  prompt — you don't reuse one instance.
+- **The handoff is manual.** `budget_cost_breakdown = stage1_result["text"]` then passed as a
+  template variable to stage 2. *You* orchestrate the sequence in Python — no agent framework.
+- **Stage 2 binds no tool on purpose.** It only judges from stage-1's prose, so a tool would
+  be dead weight (and risk a stray guessed call). Pick tools per stage by what that stage needs.
+- **How it differs from a ReAct loop:** a loop runs the *same* model over multiple tool rounds
+  for *one* question; a cascade chains *different* LLM calls (different roles/prompts), each a
+  complete answer feeding the next. Loop = depth within one task; cascade = breadth across tasks.
 
 ## Where each method lives
 

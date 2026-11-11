@@ -12,7 +12,8 @@
 
 ## 1. What we actually observed
 
-Running `demo_single_pass_limitation()` produced this (abbreviated):
+Running the single-pass demos (`demo_single_pass_limitation_using_langchain_llm` /
+`demo_single_pass_limitation_using_raw_llm`) produced this (abbreviated):
 
 ```
 [OK] Q1 (LangChainLLM.invoke_with_tools):
@@ -307,8 +308,8 @@ The ReAct loop (§8) tames a multi-layer graph by adding *rounds*. There is a se
 that needs **no loop at all**: shrink the graph the model sees by **doing the upstream steps
 in Python**.
 
-`demo_prompt_template_chain_v2` does exactly this. Instead of binding both tools and hoping,
-it:
+`demo_prompt_template_chain_with_llm_implicit_tool_calling` (the "v2" demo) does exactly this.
+Instead of binding both tools and hoping, it:
 
 1. **Fetches the DB record in Python** (`fetch_place_fast`) — resolving the `fetch → compute`
    edge's input half *before* the model is involved.
@@ -363,8 +364,8 @@ Verified single round (Goa, 5 friends, 3 nights, ₹8000 budget):
 
 | Approach | Tool calls by the model | When to use |
 |---|---|---|
-| **v1** `demo_prompt_template_chain` | **zero** — Python fetches AND computes; model only writes prose | You want the model purely as a writer; no risk it re-does the math |
-| **v2** `demo_prompt_template_chain_v2` | **one** grounded call to a single leaf tool | Upstream deps resolvable in code; one computation left for the model |
+| **v1** `demo_prompt_template_chain_with_manual_tool_calling` | **zero** — Python fetches AND computes; model only writes prose | You want the model purely as a writer; no risk it re-does the math |
+| **v2** `demo_prompt_template_chain_with_llm_implicit_tool_calling` | **one** grounded call to a single leaf tool | Upstream deps resolvable in code; one computation left for the model |
 | **ReAct loop** `react_loop*` | **N rounds** | Genuinely multi-layer / multi-entity (e.g. Q3's reduce) that you can't or won't pre-resolve |
 
 ### The unifying idea
@@ -389,7 +390,60 @@ unavoidable when you can't pre-resolve the fetches.)*
 
 ---
 
-## 10. Flashcards (quiz yourself)
+## 10. A third shape — cascading LLM calls (a manual prompt-chain pipeline)
+
+§8 (the loop) and §9 (pre-resolve) were both about getting **one** question answered. This
+section is a different axis: chaining **several LLM calls in sequence**, where each stage is a
+*complete* answer that becomes the next stage's input. The demo is
+`demo_prompt_template_chain_with_llm_implicit_tool_calling_and_with_manual_seq_pipeline_cascading`.
+
+```
+DB fetch (Python)
+      │
+      ▼
+Stage 1  LangChainLLM(tools=[compute_trip_cost]).invoke_with_tools(...)
+         → trip-planner role; one grounded tool round (the §9 pattern)
+         → returns a cost breakdown ending "COST_PER_PERSON: <n>"
+      │   result["text"]  ──────────────────────────────┐
+      ▼                                                  │  (manual handoff)
+Stage 2  LangChainLLM().invoke_with_tools(...)   ← NO tools (pure judgment)
+         → "money-minded friend" role; reads stage-1's text as {budget_cost_breakdown}
+         → replies "GO" / "NOT YET" + one suggested change
+```
+
+What's new here, and why it matters:
+
+- **Each stage is its own LLM with its own role and its own tool set.** Stage 1 plans *with* a
+  tool; stage 2 judges *without* one. You don't reuse a single instance — you build the right
+  `LangChainLLM` for each step.
+- **The handoff is manual and explicit:** `budget_cost_breakdown = stage1["text"]`, then passed
+  as a template variable into stage 2. *You* sequence the steps in Python — there's no agent or
+  framework pipeline deciding the order. (Feeding model text into a `{slot}` is safe: the
+  f-string formatter substitutes the value, it does not re-parse it for braces — see §9's brace
+  note, which is about the *template literal*, not the value.)
+- **Bind tools per stage by need.** Stage 2 gets no tool on purpose: it only reasons over
+  stage-1's prose, so a bound tool would be dead weight and could trigger a stray guessed call.
+
+### Loop vs cascade — don't confuse them
+
+| | ReAct loop (§8) | Cascade (this section) |
+|---|---|---|
+| Repeats… | the **same** model over multiple tool rounds | **different** LLM calls, one after another |
+| Scope | **one** question answered via several tool steps | **several** sub-tasks, each a full answer |
+| Axis | **depth** within a task | **breadth** across tasks |
+| Who decides order | the model (keeps calling tools until done) | **you** (hard-wired in Python) |
+
+Reach for a cascade when a workflow has **distinct stages with distinct roles** — plan →
+critique, draft → refine, extract → decide, compute → judge (this demo). Each stage's output is
+a deliberate, inspectable artifact you can log, validate, or swap.
+
+> **Cost note:** a cascade is N separate LLM calls, so N× latency and cost — and stage *k*
+> depends on stage *k−1*'s text being parseable. Keep each handoff explicit (a named variable,
+> a clear marker like `COST_PER_PERSON:`) rather than hoping the next model re-extracts it.
+
+---
+
+## 11. Flashcards (quiz yourself)
 
 1. **Q:** Did RawLLM beat LangChain on Q2, or did LangChain fail Q1?
    **A:** Neither — the SDKs were incidental. The model *batched* on Q2 and *sequenced* on
@@ -416,16 +470,23 @@ unavoidable when you can't pre-resolve the fetches.)*
    can still open with a guessed `compute_trip_cost` and skip the fetch. The only thing that
    makes Layer-2 non-determinism *harmless* is a ReAct loop, not a setting.
 
-6. **Q:** `demo_prompt_template_chain_v2` binds only `compute_trip_cost` and succeeds in a
-   single pass — why is that reliable when Q1's single-pass wasn't?
+6. **Q:** `demo_prompt_template_chain_with_llm_implicit_tool_calling` (the "v2" demo) binds only
+   `compute_trip_cost` and succeeds in a single pass — why is that reliable when Q1's single-pass
+   wasn't?
    **A:** Python pre-fetched the DB record, so the `fetch → compute` dependency is gone before
    the model runs. Only one leaf tool remains (one round), and the real prices are in the
    prompt, so the compute is grounded, not guessed. You flattened the graph in code instead
    of walking it with a loop.
 
+7. **Q:** How is a cascade (§10) different from a ReAct loop (§8) — aren't both "multiple calls"?
+   **A:** A loop repeats the **same** model over tool rounds to finish **one** question (depth);
+   a cascade chains **different** LLM calls, each a complete answer feeding the next (breadth).
+   In the loop the *model* decides when to stop; in a cascade *you* hard-wire the stage order in
+   Python.
+
 ---
 
-## 11. References
+## 12. References
 
 - **OpenAI — Function Calling guide** (parallel function calling, `parallel_tool_calls`,
   iterative tool-call loop for dependencies):
@@ -434,10 +495,11 @@ unavoidable when you can't pre-resolve the fetches.)*
   execution and looping are the developer's responsibility):
   https://docs.langchain.com/oss/python/langchain/overview
 - **In this repo:**
-  - `sample_demo_my_trip_planner.py` → `demo_single_pass_limitation()` (Q1/Q2/Q3 single-pass)
-  - `sample_demo_my_trip_planner.py` → `react_loop()` / `react_loop_langchain()` (the loop fix)
-  - `sample_demo_my_trip_planner.py` → `demo_prompt_template_chain()` (v1: zero tool calls, Python computes)
-  - `sample_demo_my_trip_planner.py` → `demo_prompt_template_chain_v2()` (v2: pre-resolve fetch, one grounded tool call)
+  - `sample_demo_my_trip_planner.py` → `demo_single_pass_limitation_using_langchain_llm()` / `demo_single_pass_limitation_using_raw_llm()` (Q1/Q2/Q3 single-pass; quiet-empty vs loud-crash)
+  - `sample_demo_my_trip_planner.py` → `react_loop()` / `react_loop_langchain()` and the `*_v2` demos (the loop fix, hand-rolled then packaged)
+  - `sample_demo_my_trip_planner.py` → `demo_prompt_template_chain_with_manual_tool_calling()` (v1: zero tool calls, Python computes)
+  - `sample_demo_my_trip_planner.py` → `demo_prompt_template_chain_with_llm_implicit_tool_calling()` (v2: pre-resolve fetch, one grounded tool call)
+  - `sample_demo_my_trip_planner.py` → `demo_prompt_template_chain_with_llm_implicit_tool_calling_and_with_manual_seq_pipeline_cascading()` (§10: two-stage cascade)
   - `gen_ai_core/llm/raw_llm.py` → `kwargs.pop("tools", None)` (why RawLLM crashes round 2)
   - `gen_ai_core/llm/langchain_llm.py` → `invoke_with_tools()` (single-pass; auto-detects
     LangChain `.invoke` vs plain-callable tools; accepts Prompt / ChatPromptTemplate / message

@@ -11,7 +11,7 @@ Flow:
   → model calls compute_trip_cost with those prices
   → model writes a human-friendly summary
 
-Run with:  uv run --active python demo_driver/my_trip_planner_demo/sample_demo_my_trip_planner.py
+Run with:  uv run --active python demo_driver/my_trip_planner_demo/my_trip_planner.py
 """
 
 from __future__ import annotations
@@ -702,7 +702,7 @@ def demo_react_loop_langchain_v2() -> None:
 #     StrOutputParser → extracts the plain string from the AIMessage
 #   LangChainLLM.chain() already wires exactly this pipe for you.
 
-def demo_prompt_template_chain(place: str = "Goa", people: int = 5,
+def demo_prompt_template_chain_with_manual_tool_calling(place: str = "Goa", people: int = 5,
                                nights: int = 3, budget_per_person: float = 8000) -> None:
     """DB → tool (plain Python) → LangChain chain that explains the numbers."""
     from langchain_core.prompts import ChatPromptTemplate
@@ -810,6 +810,7 @@ def demo_prompt_template_chain(place: str = "Goa", people: int = 5,
                 **tool_result,          # ← replaces all 4 explicit retrievals; extras are harmless
             })
     '''
+
     '''
     from langchain_groq import ChatGroq
     from langchain_core.output_parsers import StrOutputParser
@@ -857,7 +858,7 @@ def demo_prompt_template_chain(place: str = "Goa", people: int = 5,
 # THE CONCEPT (collapsing the dependency graph in CODE instead of with a loop):
 #   demo_single_pass_limitation showed that a fetch→compute question needs TWO
 #   tool rounds, which single-pass cannot give — so it crashes or returns empty
-#   unless the model gets lucky and batches a GUESSED compute (see LEARNER-NOTES §4-6).
+#   unless the model gets lucky and batches a GUESSED compute (see README §4-6).
 #
 #   v2's trick: do the fetch in PYTHON (resolving the upstream dependency), then
 #   bind ONLY compute_trip_cost. Now the model's graph is a single LEAF tool with
@@ -866,9 +867,9 @@ def demo_prompt_template_chain(place: str = "Goa", people: int = 5,
 #       [Python fetch]  →  compute_trip_cost  →  answer      (one tool layer)
 #
 #   A single tool round is enough — and it is RELIABLE, not luck-based, because:
-#     • Only ONE tool is bound → nothing to mis-batch or mis-order (LEARNER-NOTES §6).
+#     • Only ONE tool is bound → nothing to mis-batch or mis-order (README §6).
 #     • The REAL DB prices sit in the prompt → the compute runs on grounded data,
-#       not a guess (avoids the silent-wrongness trap of LEARNER-NOTES §4).
+#       not a guess (avoids the silent-wrongness trap of README §4).
 #
 #   Contrast with v1 (demo_prompt_template_chain): v1 computed the numbers in
 #   Python and the model only wrote prose (ZERO tool calls). v2 hands the model
@@ -880,7 +881,7 @@ def demo_prompt_template_chain(place: str = "Goa", people: int = 5,
 #   PROMPT MIX: invoke_with_tools() now accepts a ChatPromptTemplate (+ variables),
 #   so system = Prompt (RCTFC scaffold) and human = ChatPromptTemplate slots.
 
-def demo_prompt_template_chain_v2(place: str = "Goa", people: int = 5,
+def demo_prompt_template_chain_with_llm_implicit_tool_calling(place: str = "Goa", people: int = 5,
                                   nights: int = 3, budget_per_person: float = 8000) -> None:
     """Pre-resolve the DB fetch in Python, bind ONLY compute_trip_cost, let the
     model make ONE grounded tool call — single-pass, no ReAct loop needed."""
@@ -928,13 +929,45 @@ def demo_prompt_template_chain_v2(place: str = "Goa", people: int = 5,
     # NOTE: we pass the BARE LangChain tool — no TOOLS/TOOLS_MAP dict wrapper
     #       needed. The StructuredTool carries its own .name + schema, and
     #       LangChainLLM builds its execute-map from that directly.
-    lc = LangChainLLM(tools=[compute_trip_cost])
-    result = lc.invoke_with_tools(trip_planner_prompt, {
+    result = LangChainLLM(tools=[compute_trip_cost]).invoke_with_tools(trip_planner_prompt, {
         **db_record,
         "people": people,
         "nights": nights,
         "budget_per_person": budget_per_person,
     })
+
+    '''
+    result = LangChainLLM(provider = "groq", model = "openai/gpt-oss-120b", tools=[compute_trip_cost]).invoke_with_tools(
+                                                                        ChatPromptTemplate.from_messages([
+                                                                            ("system", Prompt(
+                                                                                                role="a trip planner for a group of friends",
+                                                                                                task="Call the compute_trip_cost tool with the numbers below, then explain the result in simple words.",
+                                                                                                constraints=[
+                                                                                                    "Use the compute_trip_cost tool for ALL arithmetic — do NOT do the math yourself.",
+                                                                                                    "End your reply with a line: COST_PER_PERSON: <total per person from the tool>",
+                                                                                                ],
+                                                                                            ).get_base_system_prompt()
+                                                                            ),                 # ← reused RCTFC scaffold
+
+                                                                            ("human",
+                                                                                "Trip: {name} ({trip_type}), best months {best_months}\n"
+                                                                                "Group: {people} friends, {nights} nights at {stay_name}\n"
+                                                                                "Prices from our database (pass these to compute_trip_cost):\n"
+                                                                                "  Room per night         : ₹{room_price_per_night}\n"
+                                                                                "  Travel per person      : ₹{travel_cost_per_person}\n"
+                                                                                "  Daily spend per person : ₹{daily_spend_per_person}\n"
+                                                                                "Budget per person        : ₹{budget_per_person}"
+                                                                            ),
+                                                                        ]), 
+
+                                                                        {
+                                                                            **db_record,
+                                                                            "people": people,
+                                                                            "nights": nights,
+                                                                            "budget_per_person": budget_per_person,
+                                                                        }
+                                                                    )
+    '''
 
     # --- Step 4: report the single tool round + final answer ---
     for tc in result["tool_calls"]:
@@ -946,16 +979,90 @@ def demo_prompt_template_chain_v2(place: str = "Goa", people: int = 5,
     print("  DB prices in the prompt), so no guess and no ReAct loop needed.")
     print("-" * 70 + "\n")
 
+# Manual Multi-pipeline
+def demo_prompt_template_chain_with_llm_implicit_tool_calling_and_with_manual_seq_pipeline_cascading(place: str = "Goa", people: int = 5, nights: int = 3, budget_per_person: float = 8000) -> None:
+    
+    # --- Step 1: DB lookup in Python — resolves the UPSTREAM dependency ---
+    db_record = fetch_place_fast(place)
+    if not db_record:
+        print(f"Place {place!r} not found.")
+        return
+    
+    # --- Step 2: call LLM with single tool --- 
+    from langchain_core.prompts import ChatPromptTemplate
+    from gen_ai_core import Prompt                                                                                                           
+    user_trip_explain_result = LangChainLLM(
+                                        # provider = "groq", model = "openai/gpt-oss-120b", 
+                                        tools=[compute_trip_cost]).invoke_with_tools(
+                                                                            ChatPromptTemplate.from_messages([
+                                                                                ("system", Prompt(
+                                                                                                    role="a trip planner for a group of friends",
+                                                                                                    task="Call the compute_trip_cost tool with the numbers below, then explain the result in simple words.",
+                                                                                                    constraints=[
+                                                                                                        "Use the compute_trip_cost tool for ALL arithmetic — do NOT do the math yourself.",
+                                                                                                        "End your reply with a line: COST_PER_PERSON: <total per person from the tool>",
+                                                                                                    ],
+                                                                                                ).get_base_system_prompt()
+                                                                                ),                 # ← reused RCTFC scaffold
+    
+                                                                                ("human",
+                                                                                    "Trip: {name} ({trip_type}), best months {best_months}\n"
+                                                                                    "Group: {people} friends, {nights} nights at {stay_name}\n"
+                                                                                    "Prices from our database (pass these to compute_trip_cost tool):\n"
+                                                                                    "  Room per night           : ₹{room_price_per_night}\n"
+                                                                                    "  Travel per person        : ₹{travel_cost_per_person}\n"
+                                                                                    "  Daily spend per person   : ₹{daily_spend_per_person}\n"
+                                                                                    "  Budget per person        : ₹{budget_per_person}"
+                                                                                ),
+                                                                            ]), 
+    
+                                                                            {
+                                                                                **db_record,
+                                                                                "people": people,
+                                                                                "nights": nights,
+                                                                                "budget_per_person": budget_per_person,
+                                                                            }
+                                                                        )
+
+    budget_cost_breakdown = user_trip_explain_result['text']
+    trip_decision_result = LangChainLLM(
+                                        # provider = "groq", model = "openai/gpt-oss-120b", 
+                                        # tools=[compute_trip_cost]
+                                        ).invoke_with_tools(
+                                                                ChatPromptTemplate.from_messages([
+                                                                    ("system", Prompt(
+                                                                                        role="the group's money-minded friend.",
+                                                                                        context="Money left per person = budget - total cost per person.",
+                                                                                        task="Check if within budget. If over budget, suggest one simple change (fewer nights, cheaper place, more friends).",
+                                                                                        output_format="Say clearly: GO (within budget) or NOT YET (over budget).",
+                                                                                    ).get_base_system_prompt()
+                                                                    ),                 # ← reused RCTFC scaffold
+
+                                                                    ("human",
+                                                                        "Trip: {name} | Budget per person: ₹{budget_per_person}\n\n"
+                                                                        "Cost breakdown:\n{budget_cost_breakdown}"
+                                                                    ),
+                                                                ]), 
+
+                                                                {
+                                                                    "name":                         db_record["name"],
+                                                                    "budget_per_person":            budget_per_person,
+                                                                    "budget_cost_breakdown":        budget_cost_breakdown,      # ← llm-1's output is llm-2's input
+                                                                }
+                                        )
+    print(f"\n--- Go or Not Yet ---\n{trip_decision_result['text']}")
+
 
 def main() -> None:
-    demo_single_pass_limitation_using_langchain_llm()       # single-pass (LangChain for Q1): Q1/Q2 work, Q3 crashes
+    # demo_single_pass_limitation_using_langchain_llm()       # single-pass (LangChain for Q1): Q1/Q2 work, Q3 crashes
     # demo_single_pass_limitation_using_raw_llm()           # single-pass (RawLLM throughout): Q1/Q2 work, Q3 crashes
     # demo_react_loop()                   # ReAct loop (raw SDK) solves Q3
     # demo_react_loop_v2()                # ReAct loop via RawLLM.invoke_with_multiple_tools_in_agentic_react_loop
     # demo_react_loop_langchain()           # ReAct loop (LangChain) — same tools, same result
     # demo_react_loop_langchain_v2()      # ReAct loop via LangChainLLM.invoke_with_multiple_tools_in_agentic_react_loop
-    # demo_prompt_template_chain()        # ChatPromptTemplate + chain — model explains, Python computes
-    # demo_prompt_template_chain_v2()     # pre-resolve fetch + bind only compute_trip_cost (single-pass tool call)
+    # demo_prompt_template_chain_with_manual_tool_calling()        # ChatPromptTemplate + chain — model explains, Python computes
+    # demo_prompt_template_chain_with_llm_implicit_tool_calling()     # pre-resolve fetch + bind only compute_trip_cost (single-pass tool call)
+    demo_prompt_template_chain_with_llm_implicit_tool_calling_and_with_manual_seq_pipeline_cascading()
 
 if __name__ == "__main__":
     main()
