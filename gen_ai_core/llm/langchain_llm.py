@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from config.settings import Settings, get_settings
@@ -68,12 +69,15 @@ class LangChainLLM:
         #   _llm      → model with tools bound (if tools were provided)
         if self._tools:
             self._llm = self._llm_base.bind_tools(self._tools)
-            # Build name → callable map if tools carry a "function" key
-            self._tool_fn_map = {
-                t["name"]: t["function"]
-                for t in self._tools
-                if isinstance(t, dict) and "function" in t
-            }
+            # Build name → executable map, supporting BOTH tool shapes:
+            #   • RawLLM-style dict      → {"name": ..., "function": callable}
+            #   • bare LangChain tool    → a StructuredTool that carries its own .name
+            self._tool_fn_map = {}
+            for t in self._tools:
+                if isinstance(t, dict) and "function" in t:
+                    self._tool_fn_map[t["name"]] = t["function"]
+                elif hasattr(t, "name"):          # BaseTool / StructuredTool
+                    self._tool_fn_map[t.name] = t
         else:
             self._llm = self._llm_base
 
@@ -82,8 +86,14 @@ class LangChainLLM:
         resp = self._llm_base.invoke(prompt.to_lc_messages())
         return getattr(resp, "text", None) or resp.content
 
-    def invoke_with_tools(self, prompt: Prompt) -> dict:
+    def invoke_with_tools(self, prompt: Any, variables: dict | None = None) -> dict:
         """Single-pass tool calling: model requests tools → we execute → model summarises.
+
+        Flexible input — `prompt` may be any of:
+          • Prompt             → our dataclass (uses .to_lc_messages())
+          • ChatPromptTemplate → (or any LC prompt) formatted with `variables`
+          • list[BaseMessage]  → already-built LangChain messages, used as-is
+          • str                → treated as a single human message
 
         This is the LangChain equivalent of RawLLM.generate_response_content().
         Same single-pass limitation: if the model needs more than one round of
@@ -94,22 +104,20 @@ class LangChainLLM:
         """
         from langchain_core.messages import ToolMessage
 
-        if not self._tools:
-            return {"text": self.invoke(prompt), "tool_calls": []}
+        messages = self._coerce_to_lc_messages(prompt, variables)
 
-        messages = prompt.to_lc_messages()
+        if not self._tools:
+            resp = self._llm_base.invoke(messages)
+            text = getattr(resp, "text", None) or resp.content
+            return {"text": (text or "").strip(), "tool_calls": []}
+
         response = self._llm.invoke(messages)
         messages.append(response)
         tool_calls_log: list[dict] = []
 
         if getattr(response, "tool_calls", None) and self._tool_fn_map:
             for tc in response.tool_calls:
-                fn = self._tool_fn_map.get(tc["name"])
-                if fn is None:
-                    result = json.dumps({"error": f"Unknown tool: {tc['name']}"})
-                else:
-                    raw = fn(**tc["args"])
-                    result = raw if isinstance(raw, str) else json.dumps(raw)
+                result = self._exec_tool(tc["name"], tc["args"])
                 tool_calls_log.append({"name": tc["name"], "args": tc["args"], "result": result})
                 messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
@@ -123,11 +131,97 @@ class LangChainLLM:
 
         return {"text": (text or "").strip(), "tool_calls": tool_calls_log}
 
+    def invoke_with_multiple_tools_in_agentic_react_loop(
+        self, prompt: Any, variables: dict | None = None, *, max_iterations: int = 5
+    ) -> dict:
+        """Multi-turn ReAct loop (LangChain): tools stay bound on EVERY round
+        until the model stops calling them (or max_iterations is hit).
+
+        This is the multi-round cousin of invoke_with_tools(). Where single-pass
+        runs exactly one tool round (and fails on questions needing a second),
+        this loop re-sends the tools each turn — so sequential / multi-entity
+        questions ("compare A vs B") work. Mirrors react_loop_langchain() in
+        demo_driver/my_trip_planner_demo/my_trip_planner.py.
+
+        `prompt`: Prompt | ChatPromptTemplate (+ variables) | message list | str.
+        Returns: dict with keys text, tool_calls, iterations, latency_ms.
+        """
+        from langchain_core.messages import ToolMessage
+
+        t0 = time.perf_counter()
+        messages = self._coerce_to_lc_messages(prompt, variables)
+
+        # No tools → one plain text completion, framed like the loop result.
+        if not self._tools:
+            resp = self._llm_base.invoke(messages)
+            text = getattr(resp, "text", None) or resp.content
+            return {"text": (text or "").strip(), "tool_calls": [],
+                    "iterations": 0, "latency_ms": (time.perf_counter() - t0) * 1000}
+
+        tool_calls_log: list[dict] = []
+        for iteration in range(1, max_iterations + 1):
+            response = self._llm.invoke(messages)   # tools bound every round — never dropped
+            messages.append(response)
+
+            # No tool calls → model is done reasoning → final text answer.
+            if not getattr(response, "tool_calls", None):
+                text = getattr(response, "text", None) or response.content
+                return {"text": (text or "").strip(), "tool_calls": tool_calls_log,
+                        "iterations": iteration, "latency_ms": (time.perf_counter() - t0) * 1000}
+
+            # Execute each requested tool, feed results back, loop again.
+            for tc in response.tool_calls:
+                result = self._exec_tool(tc["name"], tc["args"])
+                tool_calls_log.append({"name": tc["name"], "args": tc["args"], "result": result})
+                messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
+
+        # Safety exit — model kept requesting tools past max_iterations.
+        return {"text": "Stopped: too many tool-call rounds without a final answer.",
+                "tool_calls": tool_calls_log, "iterations": max_iterations,
+                "latency_ms": (time.perf_counter() - t0) * 1000}
+
+    def _exec_tool(self, name: str, args: dict) -> str:
+        """Execute one tool by name → JSON string. Duck-typed dispatch:
+        LangChain tools use .invoke({args}); plain functions take kwargs."""
+        fn = self._tool_fn_map.get(name)
+        if fn is None:
+            return json.dumps({"error": f"Unknown tool: {name}"})
+        raw = fn.invoke(args) if hasattr(fn, "invoke") else fn(**args)
+        return raw if isinstance(raw, str) else json.dumps(raw)
+
+    @staticmethod
+    def _coerce_to_lc_messages(prompt: Any, variables: dict | None = None) -> list:
+        """Normalise any supported prompt input into a mutable list of LangChain
+        messages, so invoke_with_tools can consume several datatypes.
+
+        Order matters — each branch tests a capability, most specific first.
+        """
+        # 1) our Prompt dataclass → knows how to emit LangChain messages
+        if hasattr(prompt, "to_lc_messages"):
+            return list(prompt.to_lc_messages())
+        # 2) already a list of messages → copy so appends don't mutate the caller's list
+        if isinstance(prompt, list):
+            return list(prompt)
+        # 3) an already-formatted PromptValue (e.g. ChatPromptValue) → has .to_messages()
+        if hasattr(prompt, "to_messages"):
+            return list(prompt.to_messages())
+        # 4) a ChatPromptTemplate / Runnable prompt → format with variables, then flatten
+        if hasattr(prompt, "invoke"):
+            value = prompt.invoke(variables or {})
+            return list(value.to_messages() if hasattr(value, "to_messages") else value)
+        # 5) a plain string → single human message
+        if isinstance(prompt, str):
+            from langchain_core.messages import HumanMessage
+            return [HumanMessage(content=prompt)]
+        raise TypeError(f"invoke_with_tools: unsupported prompt type {type(prompt)!r}")
+
     '''
         lets you define reusable prompt templates with named variables,
         then fill them with different data each time
         — useful when you have structured/computed data to inject
     '''
     def chain(self, prompt: ChatPromptTemplate) -> Any:
+        # Returns a LangChain pipe (RunnableSequence) → supports .invoke() only, NOT .invoke_with_tools().
+        # Text-only (uses _llm_base, no tools). For tool calling, skip chain() and use invoke_with_tools().
         from langchain_core.output_parsers import StrOutputParser
         return prompt | self._llm_base | StrOutputParser()

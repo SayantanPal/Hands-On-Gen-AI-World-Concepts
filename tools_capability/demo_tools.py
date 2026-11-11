@@ -214,32 +214,36 @@ def trip_cost_tool(travel_cost_per_person: float, room_price_per_night: float,
     return {"rooms_needed": rooms_needed, "stay_share": stay_share,
             "food_and_fun": food_and_fun, "total_per_person": total}
             
-            
+# ── The calculator tool ────────────────────────────────────────────────────
 @tool
-def compute_trip_cost(travel_cost_per_person: float, room_price_per_night: float,
-                      daily_spend_per_person: float, people: int, nights: int,
-                      budget_per_person: float | None = None) -> dict:
+def compute_trip_cost(
+    travel_cost_per_person: float,
+    room_price_per_night: float,
+    daily_spend_per_person: float,
+    people: int,
+    nights: int,
+    budget_per_person: float | None = None,
+) -> dict:
     """
     Compute the trip cost per person with exact arithmetic.
     One room fits 2 people. Returns: rooms_needed, stay_share_per_person,
     food_and_fun_per_person, total_per_person, and (if a budget is given)
     within_budget and money_left_per_person (negative = over budget).
     """
-    rooms_needed = math.ceil(people / 2)
-    stay_share = round(rooms_needed * room_price_per_night * nights / people, 2)
-    food_and_fun = round(daily_spend_per_person * nights, 2)
-    total = round(travel_cost_per_person + stay_share + food_and_fun, 2)
+    rooms_needed_per_person = math.ceil(people / 2)
+    stay_share_per_person = round(rooms_needed_per_person * room_price_per_night * nights / people, 2)
+    food_and_fun_per_person = round(daily_spend_per_person * nights, 2)
+    total_per_person = round(travel_cost_per_person + stay_share_per_person + food_and_fun_per_person, 2)
     result = {
-        "rooms_needed": rooms_needed,
-        "stay_share_per_person": stay_share,
-        "food_and_fun_per_person": food_and_fun,
-        "total_per_person": total,
+        "rooms_needed_per_person": rooms_needed_per_person,
+        "stay_share_per_person": stay_share_per_person,
+        "food_and_fun_per_person": food_and_fun_per_person,
+        "total_per_person": total_per_person,
     }
     if budget_per_person is not None:
-        result["within_budget"] = total <= budget_per_person
-        result["money_left_per_person"] = round(budget_per_person - total, 2)
+        result["within_budget"] = total_per_person <= budget_per_person
+        result["money_left_per_person"] = round(budget_per_person - total_per_person, 2)
     return result
-
 # ----------------------------------------
 # Custom Tools creating WRITE updates 
 # ----------------------------------------
@@ -386,29 +390,4 @@ async def check_warehouse_inventory(product_id: str, warehouse: str) -> dict: # 
 # await main()
 
 # ----------------------------------------
-# ── 2. The calculator tool ────────────────────────────────────────────────────
-def compute_trip_cost(
-    travel_cost_per_person: float,
-    room_price_per_night: float,
-    daily_spend_per_person: float,
-    people: int,
-    nights: int,
-    budget_per_person: float | None = None,
-) -> dict:
-    """Compute rooms needed, stay share, food & fun, and total cost per person with exact arithmetic."""
-    rooms_needed = math.ceil(people / 2)
-    stay_share = round(rooms_needed * room_price_per_night * nights / people, 2)
-    food_and_fun = round(daily_spend_per_person * nights, 2)
-    total = round(travel_cost_per_person + stay_share + food_and_fun, 2)
-    result = {
-        "rooms_needed": rooms_needed,
-        "stay_share_per_person": stay_share,
-        "food_and_fun_per_person": food_and_fun,
-        "total_per_person": total,
-    }
-    if budget_per_person is not None:
-        result["within_budget"] = total <= budget_per_person
-        result["money_left_per_person"] = round(budget_per_person - total, 2)
-    return result
 
-# ----------------------------------------

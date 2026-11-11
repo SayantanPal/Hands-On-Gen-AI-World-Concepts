@@ -293,9 +293,103 @@ That is exactly what `react_loop()` (raw SDK) and `react_loop_langchain()` (Lang
 ReAct trades cost for correctness: single-pass is exactly 2 API calls; a loop is `2 + 2N`
 in the worst case (`N` = rounds). Most questions need 1–3 rounds.
 
+> **Also available as a reusable method.** The same loop is packaged on both wrappers as
+> `invoke_with_multiple_tools_in_agentic_react_loop(prompt, variables=None, *, max_iterations=5)`
+> — `RawLLM` (openai/groq/ollama) and `LangChainLLM`. Both accept a `Prompt` *or* a
+> `ChatPromptTemplate` (+ variables) and return `{text, tool_calls, iterations, latency_ms}`.
+> The `react_loop*` demo functions above are the same logic, spelled out step-by-step.
+
 ---
 
-## 9. Flashcards (quiz yourself)
+## 9. A second cure — pre-resolve the dependency in code (single leaf tool)
+
+The ReAct loop (§8) tames a multi-layer graph by adding *rounds*. There is a second cure
+that needs **no loop at all**: shrink the graph the model sees by **doing the upstream steps
+in Python**.
+
+`demo_prompt_template_chain_v2` does exactly this. Instead of binding both tools and hoping,
+it:
+
+1. **Fetches the DB record in Python** (`fetch_place_fast`) — resolving the `fetch → compute`
+   edge's input half *before* the model is involved.
+2. **Binds ONLY `compute_trip_cost`** and puts the real prices in the prompt.
+3. Lets the model make **one** tool call.
+
+**Mechanism (full reuse — no hand-rolled orchestration):** v2 binds the tool via the
+constructor, `LangChainLLM(tools=[compute_trip_cost])`, and delegates the whole single-pass
+flow to `invoke_with_tools()`. That method is datatype-flexible — it accepts a `Prompt`, a
+`ChatPromptTemplate` (+ a variables dict), a pre-built message list, or a plain `str` — so v2
+can hand it the **mix it wants**: system = a `Prompt` RCTFC scaffold, human = a
+`ChatPromptTemplate` with `{slots}`, filled from one `variables` dict:
+
+```python
+lc = LangChainLLM(tools=[compute_trip_cost])   # bare LangChain tool — no TOOLS_MAP wrapper
+result = lc.invoke_with_tools(chat_prompt_template, {**db_record, "people": people, ...})
+```
+
+No manual `bind_tools`, no manual invoke→execute→invoke loop — the class owns both.
+
+> **Tool shapes:** `LangChainLLM(tools=...)` accepts **either** a bare LangChain tool
+> (`StructuredTool`, which carries its own `.name` + schema) **or** a RawLLM-style dict
+> (`{"name", "description", "parameters", "function"}`). The dict form is only needed when
+> the same tool list must also feed RawLLM / the ReAct demos; for a pure-LangChain path, the
+> bare tool is the cleaner choice.
+
+The graph the model now faces:
+
+```
+[Python fetch]  →  compute_trip_cost  →  answer      (ONE tool layer)
+```
+
+A single tool round is enough — **and it's reliable, not luck-based** (contrast the §4/§6
+gambles):
+
+- **Only one tool is bound** → Layer-1 batching is moot and Layer-2 ordering is trivial. The
+  two dice of §6 stop rolling: there is nothing to mis-batch or mis-order.
+- **The real DB prices are in the prompt** → the single `compute` runs on grounded data, not
+  a training-knowledge guess. The §4 silent-wrongness trap cannot trigger, because there is
+  no competing fetch whose result arrives too late — the data is already resolved.
+
+Verified single round (Goa, 5 friends, 3 nights, ₹8000 budget):
+
+```
+[single tool round] compute_trip_cost({room 3000, travel 2800, daily 1500, people 5, nights 3, budget 8000})
+    → {total_per_person: 12700.0, ...}
+[Answer] ... total cost of ₹12,700 per person ... ₹4,700 over budget.
+         COST_PER_PERSON: 12700.0
+```
+
+### Three ways to handle the same work — pick by shape
+
+| Approach | Tool calls by the model | When to use |
+|---|---|---|
+| **v1** `demo_prompt_template_chain` | **zero** — Python fetches AND computes; model only writes prose | You want the model purely as a writer; no risk it re-does the math |
+| **v2** `demo_prompt_template_chain_v2` | **one** grounded call to a single leaf tool | Upstream deps resolvable in code; one computation left for the model |
+| **ReAct loop** `react_loop*` | **N rounds** | Genuinely multi-layer / multi-entity (e.g. Q3's reduce) that you can't or won't pre-resolve |
+
+### The unifying idea
+
+ReAct and "pre-resolve in code" are **two levers on the same dependency graph** (§3):
+
+- The **loop** keeps tools available across rounds, so the model can *walk* a multi-layer
+  graph itself.
+- **Pre-resolving** *flattens* the graph before the model runs, so a single pass is all that
+  is left.
+
+> **Rule of thumb:** every tool-layer you resolve in Python is a round you don't have to
+> gamble on. If you can resolve the upstream fetches yourself and only one leaf computation
+> remains, single-pass is both simpler and safer than a loop. Reach for the loop when the
+> graph genuinely can't be flattened ahead of time — like Q3's *reduce* over results the
+> model can only get at runtime.
+
+*(Side note: even Q3 could go single-pass if Python pre-fetched **both** destinations and
+bound only `compute_trip_cost` — the two computes are independent, so the model can batch
+them in one round and do the "which is cheaper" compare in its summary. The loop is only
+unavoidable when you can't pre-resolve the fetches.)*
+
+---
+
+## 10. Flashcards (quiz yourself)
 
 1. **Q:** Did RawLLM beat LangChain on Q2, or did LangChain fail Q1?
    **A:** Neither — the SDKs were incidental. The model *batched* on Q2 and *sequenced* on
@@ -322,9 +416,16 @@ in the worst case (`N` = rounds). Most questions need 1–3 rounds.
    can still open with a guessed `compute_trip_cost` and skip the fetch. The only thing that
    makes Layer-2 non-determinism *harmless* is a ReAct loop, not a setting.
 
+6. **Q:** `demo_prompt_template_chain_v2` binds only `compute_trip_cost` and succeeds in a
+   single pass — why is that reliable when Q1's single-pass wasn't?
+   **A:** Python pre-fetched the DB record, so the `fetch → compute` dependency is gone before
+   the model runs. Only one leaf tool remains (one round), and the real prices are in the
+   prompt, so the compute is grounded, not guessed. You flattened the graph in code instead
+   of walking it with a loop.
+
 ---
 
-## 10. References
+## 11. References
 
 - **OpenAI — Function Calling guide** (parallel function calling, `parallel_tool_calls`,
   iterative tool-call loop for dependencies):
@@ -334,7 +435,10 @@ in the worst case (`N` = rounds). Most questions need 1–3 rounds.
   https://docs.langchain.com/oss/python/langchain/overview
 - **In this repo:**
   - `my_trip_planner.py` → `demo_single_pass_limitation()` (Q1/Q2/Q3 single-pass)
-  - `my_trip_planner.py` → `react_loop()` / `react_loop_langchain()` (the fix)
+  - `my_trip_planner.py` → `react_loop()` / `react_loop_langchain()` (the loop fix)
+  - `my_trip_planner.py` → `demo_prompt_template_chain()` (v1: zero tool calls, Python computes)
+  - `my_trip_planner.py` → `demo_prompt_template_chain_v2()` (v2: pre-resolve fetch, one grounded tool call)
   - `gen_ai_core/llm/raw_llm.py` → `kwargs.pop("tools", None)` (why RawLLM crashes round 2)
-  - `gen_ai_core/llm/langchain_llm.py` → `invoke_with_tools()` (single-pass; empty on
-    under-fetch) vs a real loop
+  - `gen_ai_core/llm/langchain_llm.py` → `invoke_with_tools()` (single-pass; auto-detects
+    LangChain `.invoke` vs plain-callable tools; accepts Prompt / ChatPromptTemplate / message
+    list / str via `_coerce_to_lc_messages`) vs a real loop

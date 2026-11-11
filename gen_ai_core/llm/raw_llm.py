@@ -194,8 +194,116 @@ class RawLLM:
         fn = self._tool_map.get(name)
         if fn is None:
             return json.dumps({"error": f"Unknown tool: {name}"})
-        result = fn(**arguments)
+        # Duck-typed: LangChain @tool objects expose .invoke({args}) and are
+        # not plain-callable; plain Python functions take kwargs directly.
+        result = fn.invoke(arguments) if hasattr(fn, "invoke") else fn(**arguments)
         return result if isinstance(result, str) else json.dumps(result)
+
+    @staticmethod
+    def _lc_messages_to_role_dicts(msgs: list) -> list[dict]:
+        """Convert LangChain message objects → OpenAI role dicts. Duck-typed on
+        .type / .content, so no hard LangChain import is needed here."""
+        role_map = {"system": "system", "human": "user", "ai": "assistant", "tool": "tool"}
+        return [
+            {"role": role_map.get(getattr(m, "type", "user"), "user"),
+             "content": getattr(m, "content", str(m))}
+            for m in msgs
+        ]
+
+    def _coerce_to_role_dicts(self, prompt: Any, variables: dict | None = None) -> list[dict]:
+        """Normalise supported prompt inputs into OpenAI role dicts, so the
+        ReAct loop accepts several datatypes (most-specific branch first).
+
+        Accepts: Prompt | ChatPromptTemplate (+variables) | role-dict list | str.
+        """
+        # 1) our Prompt dataclass → already emits OpenAI role dicts
+        if hasattr(prompt, "to_role_dicts"):
+            return list(prompt.to_role_dicts())
+        # 2) already a list of role dicts → copy so appends don't mutate caller's
+        if isinstance(prompt, list):
+            return list(prompt)
+        # 3) an already-formatted PromptValue → .to_messages() then convert
+        if hasattr(prompt, "to_messages"):
+            return self._lc_messages_to_role_dicts(prompt.to_messages())
+        # 4) a ChatPromptTemplate / Runnable prompt → format with variables, convert
+        if hasattr(prompt, "invoke"):
+            value = prompt.invoke(variables or {})
+            msgs = value.to_messages() if hasattr(value, "to_messages") else value
+            return self._lc_messages_to_role_dicts(msgs)
+        # 5) a plain string → single user message
+        if isinstance(prompt, str):
+            return [{"role": "user", "content": prompt}]
+        raise TypeError(f"react loop: unsupported prompt type {type(prompt)!r}")
+
+    def invoke_with_multiple_tools_in_agentic_react_loop(
+        self, prompt: Any, variables: dict | None = None, *, max_iterations: int = 5
+    ) -> dict:
+        """Multi-turn ReAct loop (raw OpenAI-compatible SDK): tools stay in the
+        request on EVERY round (never popped), so the model can chain several
+        sequential tool calls until it is done.
+
+        This is the multi-round cousin of generate_response_content(), which is
+        single-pass (drops tools after one round and thus crashes on questions
+        needing a second). Mirrors react_loop() in
+        demo_driver/my_trip_planner_demo/my_trip_planner.py.
+
+        Supported providers: openai / groq / ollama (chat.completions API).
+        For anthropic / gemini / sap, use generate_response_content (single pass)
+        or add a provider-specific loop — their message formats differ.
+
+        `prompt`: Prompt | ChatPromptTemplate (+ variables) | role-dict list | str.
+        Returns: dict with keys text, tool_calls, iterations, latency_ms.
+        """
+        if self._provider not in {"openai", "groq", "ollama"}:
+            raise NotImplementedError(
+                f"ReAct loop here supports openai/groq/ollama; got {self._provider!r}. "
+                "Use generate_response_content() for a single pass, or add a "
+                "provider-specific loop for anthropic/gemini/sap."
+            )
+
+        t0 = time.perf_counter()
+        messages = self._coerce_to_role_dicts(prompt, variables)
+        tool_defs = self._openai_tool_defs() if self._tools else None
+        tool_calls_log: list[dict] = []
+
+        for iteration in range(1, max_iterations + 1):
+            kwargs: dict[str, Any] = {
+                "model": self._model,
+                "messages": messages,
+                "temperature": self._llm_temperature,
+                "max_tokens": self._max_tokens,
+            }
+            if tool_defs:
+                kwargs["tools"] = tool_defs          # tools on EVERY round — never popped
+            resp = self._client.chat.completions.create(**kwargs)
+            msg = resp.choices[0].message
+
+            # No tool calls → model is done reasoning → final text answer.
+            if not msg.tool_calls:
+                return {"text": (msg.content or "").strip(), "tool_calls": tool_calls_log,
+                        "iterations": iteration, "latency_ms": (time.perf_counter() - t0) * 1000}
+
+            # Record the assistant's tool_calls (needed so tool results match ids).
+            messages.append({
+                "role": "assistant",
+                "content": msg.content or "",
+                "tool_calls": [
+                    {"id": tc.id, "type": "function",
+                     "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                    for tc in msg.tool_calls
+                ],
+            })
+            # Execute each tool, feed results back, then loop with tools still present.
+            for tc in msg.tool_calls:
+                fn_args = json.loads(tc.function.arguments)
+                result = self._execute_tool(tc.function.name, fn_args)
+                tool_calls_log.append({"name": tc.function.name, "args": fn_args, "result": result})
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+        # Safety exit — model kept requesting tools past max_iterations.
+        return {"text": "Stopped: too many tool-call rounds without a final answer.",
+                "tool_calls": tool_calls_log, "iterations": max_iterations,
+                "latency_ms": (time.perf_counter() - t0) * 1000}
 
 
     def generate_response_content(self, prompt: Prompt, *, json_mode: bool = False,
@@ -294,7 +402,7 @@ class RawLLM:
         kwargs: dict[str, Any] = {
             "model": self._model,
             "max_tokens": max_tokens or self._max_tokens,
-            "system": prompt.system_text(),
+            "system": prompt.get_base_system_prompt(),
             "messages": [{"role": "user", "content": user}],
         }
         if temperature is not None:
@@ -352,7 +460,7 @@ class RawLLM:
                 for t in self._tools
             ])]
 
-        contents = prompt.system_text() + "\n\n" + prompt.user_query
+        contents = prompt.get_base_system_prompt() + "\n\n" + prompt.user_query
         resp = self._client.models.generate_content(
             model=self._model, contents=contents, config=cfg or None,
         )

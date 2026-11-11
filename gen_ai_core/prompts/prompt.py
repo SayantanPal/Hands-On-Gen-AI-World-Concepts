@@ -17,8 +17,8 @@ class Prompt:
     assistant_priming: str = ""
     user_query: str = ""
 
-    def system_text(self) -> str:
-        base = build_rctfc_system_prompt(
+    def get_base_system_prompt(self) -> str:
+        base_sys_prompt = build_rctfc_system_prompt(
             role=self.role,
             task=self.task,
             context=self.context,
@@ -26,11 +26,11 @@ class Prompt:
             constraints=self.constraints or None,
         )
         if self.rag_context:
-            base += f"\n\n[RETRIEVED CONTEXT — answer using ONLY this when relevant]\n{self.rag_context}"
-        return base
+            base_sys_prompt += f"\n\n[RETRIEVED CONTEXT — answer using ONLY this when relevant]\n{self.rag_context}"
+        return base_sys_prompt
 
     def to_role_dicts(self) -> list[dict[str, str]]:
-        msgs = [{"role": "system", "content": self.system_text()}]
+        msgs = [{"role": "system", "content": self.get_base_system_prompt()}]
         if self.assistant_priming:
             msgs.append({"role": "assistant", "content": self.assistant_priming})
         msgs.append({"role": "user", "content": self.user_query})
@@ -38,7 +38,7 @@ class Prompt:
 
     def to_lc_messages(self) -> list[Any]:
         from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-        msgs: list[Any] = [SystemMessage(content=self.system_text())]
+        msgs: list[Any] = [SystemMessage(content=self.get_base_system_prompt())]
         if self.assistant_priming:
             msgs.append(AIMessage(content=self.assistant_priming))
         msgs.append(HumanMessage(content=self.user_query))

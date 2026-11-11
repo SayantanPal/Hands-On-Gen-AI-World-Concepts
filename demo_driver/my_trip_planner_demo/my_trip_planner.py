@@ -193,16 +193,20 @@ TOOL_FN_MAP = {t["name"]: t["function"] for t in TOOLS}
 #   handle multi-step reasoning where the model's next tool call depends on
 #   a previous tool call's result.
 
-def demo_single_pass_limitation() -> None:
-    """Show that single-pass tool calling crashes on multi-lookup questions.
+def demo_single_pass_limitation_using_langchain_llm() -> None:
+    """Same single-pass limitation demo, driven entirely by LangChainLLM.
 
-    Questions 1 & 2 work (single destination → one round of tool calls).
-    Question 3 fails (compare two destinations → needs two rounds).
+    Q1 & Q2 work (single destination → one tool round).
+    Q3 (compare two destinations → needs two rounds) does NOT crash like RawLLM
+    — LangChain never pops the tools — but invoke_with_tools runs only ONE round,
+    so the answer comes back empty / partial. Same single-pass limit, quieter
+    face. (The RawLLM twin crashes loudly; see demo_single_pass_limitation_using_raw_llm.)
     """
     print("\n" + "=" * 70)
-    print("  DEMO: Single-pass limitation (RawLLM.generate_response_content)")
+    print("  DEMO: Single-pass limitation (LangChainLLM.invoke_with_tools)")
     print("=" * 70)
 
+    lc = LangChainLLM(tools=TOOLS)
     print(f"[Trip Planner] Tools registered: {list(TOOLS_MAP)}\n")
     prompt_role = "a helpful trip cost planner for a group of friends"
 
@@ -210,45 +214,83 @@ def demo_single_pass_limitation() -> None:
     # Works — one destination, one round of tool calls
     q1 = "How much will a 3-night Goa trip cost for 5 friends?"
     print(f"\n[OK] Q1: {q1}")
-    # LangChain equivalent (returns dict instead of LLMResult):
-    # LangChain equivalent (1-line swap — tools bound internally via .bind_tools()):
-    lc_llm = LangChainLLM(tools=TOOLS)
-    r1 = lc_llm.invoke_with_tools(Prompt(role=prompt_role, user_query=q1)) # r1 = llm.generate_response_content(Prompt(role=prompt_role, user_query=q1))
+    r1 = lc.invoke_with_tools(Prompt(role=prompt_role, user_query=q1))
     if r1["tool_calls"]:
         print(f'     Tools used: {[tc["name"] for tc in r1["tool_calls"]]}')
     print(f'     A: {r1["text"][:200]}...')
-    # no latency/token stats — invoke_with_tools() doesn't track them
+    # NOTE: invoke_with_tools returns a dict — no latency/token stats like RawLLM's LLMResult.
+
+    # --- Question 2: budget check ---
+    # Works — budget check, still one destination → one round of tool calls
+    q2 = "We have a budget of ₹8000 per person. Can 4 friends afford a 2-night trip to Manali?"
+    print(f"\n[OK] Q2: {q2}")
+    r2 = lc.invoke_with_tools(Prompt(role=prompt_role, user_query=q2))
+    if r2["tool_calls"]:
+        print(f'     Tools used: {[tc["name"] for tc in r2["tool_calls"]]}')
+    print(f'     A: {r2["text"][:200]}...')
+
+    # --- Question 3: compare two destinations ---
+    # No crash (LangChain keeps tools bound), but single-pass runs ONE round,
+    # so the comparison is empty / partial — the quiet twin of RawLLM's 400 crash.
+    q3 = "Compare Coorg vs Manali for 6 friends, 4 nights. Which is cheaper?"
+    print(f"\n[FAIL] Q3: {q3}")
+    r3 = lc.invoke_with_tools(Prompt(role=prompt_role, user_query=q3))
+    if r3["tool_calls"]:
+        print(f'       Tools used: {[tc["name"] for tc in r3["tool_calls"]]}')
+    print(f'       A: {r3["text"][:200] or "(empty — only one tool round ran)"}...')
+    print("       ^ No crash like RawLLM, but single-pass ran one round, so the")
+    print("         comparison is incomplete / empty — the quieter failure mode.")
+
+    print("\n" + "-" * 70)
+    print("  Single-pass cannot handle questions needing multiple tool rounds.")
+    print("  Fix: lc.invoke_with_multiple_tools_in_agentic_react_loop(...) keeps")
+    print("  tools available every round (see react_loop_langchain / demo_react_loop_langchain).")
+    print("-" * 70 + "\n")
 
 
-    # Build a RawLLM with the tools
+def demo_single_pass_limitation_using_raw_llm() -> None:
+    """Same single-pass limitation demo, but driven entirely by RawLLM.
+
+    Q1 & Q2 work (single destination → one tool round).
+    Q3 crashes (compare two destinations → needs two rounds): on the 2nd API
+    call RawLLM removes the tools (kwargs.pop("tools")), so a further tool call
+    is rejected with 400 - "Tool choice is none, but model called a tool".
+    """
+    print("\n" + "=" * 70)
+    print("  DEMO: Single-pass limitation (RawLLM — raw provider SDK)")
+    print("=" * 70)
+
     llm = RawLLM(tools=TOOLS)
     print(f"\n[Trip Planner] {llm}")
-    
+    print(f"[Trip Planner] Tools registered: {list(TOOLS_MAP)}\n")
+    prompt_role = "a helpful trip cost planner for a group of friends"
+
+    # --- Question 1: single destination ---
+    # Works — one destination, one round of tool calls
+    q1 = "How much will a 3-night Goa trip cost for 5 friends?"
+    print(f"\n[OK] Q1: {q1}")
+    r1 = llm.generate_response_content(Prompt(role=prompt_role, user_query=q1))
+    if r1.tool_calls:
+        print(f"     Tools used: {[tc['name'] for tc in r1.tool_calls]}")
+    print(f"     A: {r1.text[:200]}...")
+    print(f"     ({r1.latency_ms:.0f} ms, {r1.input_tokens} in / {r1.output_tokens} out)")
+
     # --- Question 2: budget check ---
     # Works — budget check, still one destination → one round of tool calls
     q2 = "We have a budget of ₹8000 per person. Can 4 friends afford a 2-night trip to Manali?"
     print(f"\n[OK] Q2: {q2}")
     r2 = llm.generate_response_content(Prompt(role=prompt_role, user_query=q2))
-    # LangChain equivalent:
-    # r2 = llm.invoke_with_tools(Prompt(role=prompt_role, user_query=q2))
     if r2.tool_calls:
         print(f"     Tools used: {[tc['name'] for tc in r2.tool_calls]}")
     print(f"     A: {r2.text[:200]}...")
     print(f"     ({r2.latency_ms:.0f} ms, {r2.input_tokens} in / {r2.output_tokens} out)")
 
     # --- Question 3: compare two destinations ---
-    # Crashes — two destinations, model needs two separate fetch_place calls
+    # Crashes — two destinations, model needs two separate fetch_place rounds
     q3 = "Compare Coorg vs Manali for 6 friends, 4 nights. Which is cheaper?"
     print(f"\n[FAIL] Q3: {q3}")
     try:
         r3 = llm.generate_response_content(Prompt(role=prompt_role, user_query=q3))
-        # LangChain equivalent — same single-pass limitation applies:
-        # r3 = llm.invoke_with_tools(Prompt(role=prompt_role, user_query=q3))
-        # invoke_with_tools does exactly one round of tool execution,
-        # so a compare question that needs two sequential fetches will
-        # get incomplete data (only the first batch of tool calls runs).
-        # It won't crash like RawLLM (no tools.pop), but the answer will
-        # be wrong or partial. The ReAct loop is still needed for this.
         if r3.tool_calls:
             print(f"       Tools used: {[tc['name'] for tc in r3.tool_calls]}")
         print(f"       A: {r3.text[:200]}...")
@@ -259,8 +301,8 @@ def demo_single_pass_limitation() -> None:
 
     print("\n" + "-" * 70)
     print("  Single-pass cannot handle questions needing multiple tool rounds.")
-    print("  Solution: a ReAct loop that keeps tools available until the model")
-    print("  stops requesting them (see demo_react_loop below).")
+    print("  Fix: llm.invoke_with_multiple_tools_in_agentic_react_loop(...) keeps")
+    print("  tools available every round (see react_loop / demo_react_loop).")
     print("-" * 70 + "\n")
 
 
@@ -327,7 +369,9 @@ def _execute_tool(name: str, arguments: dict) -> str:
     fn = TOOL_FN_MAP.get(name)
     if fn is None:
         return json.dumps({"error": f"Unknown tool: {name}"})
-    result = fn(**arguments)
+    # LangChain @tool objects (StructuredTool) aren't plain-callable — call
+    # them with .invoke({args}). Plain Python functions take kwargs directly.
+    result = fn.invoke(arguments) if hasattr(fn, "invoke") else fn(**arguments)
     return result if isinstance(result, str) else json.dumps(result)
 
 
@@ -569,10 +613,281 @@ def demo_react_loop_langchain() -> None:
     print("-" * 70 + "\n")
 
 
+# ===========================================================================
+# Demo 5 — LangChain prompt template + chain (NO tool calling)
+# ===========================================================================
+#
+# HOW THIS DIFFERS FROM DEMOS 2–4:
+#   Demos 2–4 let the MODEL decide which tools to call. Here PYTHON does the
+#   DB lookup and the arithmetic itself, then hands the finished numbers to
+#   the model only to WRITE THE EXPLANATION. The model never calls a tool —
+#   it just turns structured data into friendly prose. This is the safe way
+#   to present already-computed numbers (no risk of the model re-doing math).
+#
+# WHAT A ChatPromptTemplate IS:
+#   A reusable message template with {named} slots. You fill the slots with a
+#   dict at .invoke() time, so one template serves any destination.
+#
+# THE PIPE (|) CHAIN:
+#   prompt | llm | StrOutputParser()  builds a Runnable:
+#     prompt          → fills the template from your dict
+#     llm             → sends the filled messages to the model (BASE model,
+#                       no tools bound — we don't want tool calls here)
+#     StrOutputParser → extracts the plain string from the AIMessage
+#   LangChainLLM.chain() already wires exactly this pipe for you.
+
+def demo_prompt_template_chain(place: str = "Goa", people: int = 5,
+                               nights: int = 3, budget_per_person: float = 8000) -> None:
+    """DB → tool (plain Python) → LangChain chain that explains the numbers."""
+    from langchain_core.prompts import ChatPromptTemplate
+    from gen_ai_core import Prompt   # already importable
+
+    print("\n" + "=" * 70)
+    print("  DEMO: ChatPromptTemplate + chain (Python computes, model explains)")
+    print("=" * 70)
+
+    # --- Step 1: DB lookup (plain Python, no LLM) ---
+    db_record = fetch_place_fast(place)
+    if not db_record:
+        print(f"Place {place!r} not found.")
+        return
+
+    # --- Step 2: exact arithmetic via the tool, called as a LangChain tool ---
+    # compute_trip_cost is a @tool (StructuredTool) → NOT plain-callable.
+    # Use .invoke({dict}); it validates args against the schema, then runs.
+    tool_result = compute_trip_cost.invoke({
+        "travel_cost_per_person": db_record["travel_cost_per_person"],
+        "room_price_per_night":   db_record["room_price_per_night"],
+        "daily_spend_per_person": db_record["daily_spend_per_person"],
+        "people":                 people,
+        "nights":                 nights,
+        "budget_per_person":      budget_per_person,
+    })
+    print(f"\n[Tool] compute_trip_cost → {tool_result}")
+
+
+    # Merge the DB record + the tool's numbers into one flat dict of template
+    # variables. compute_trip_cost returns *_per_person keys, so map them to
+    # the template's shorter slot names. Extra keys in the dict are ignored.
+    trip_explain_data_variables = {
+        **db_record,
+        "people": people,
+        "nights": nights,
+
+        **tool_result,          # ← replaces all 4 explicit retrievals; extras are harmless
+
+        # for manual retrieval, you could uncomment the lines below and access each key individually
+        # "rooms_needed_per_person": tool_result["rooms_needed_per_person"],
+        # "stay_share_per_person":   tool_result["stay_share_per_person"],
+        # "food_and_fun_per_person": tool_result["food_and_fun_per_person"],
+        # "total_per_person":         tool_result["total_per_person"],
+    }
+
+    # --- Step 3.a.1: the reusable template ({slots} filled at invoke time) ---
+    # RCTFC system prompt — note the {total_per_person} slot survives into the string
+    # Intended slots → single braces: {total_per_person} ✅
+    # Literal braces (e.g. a JSON example in output_format="Return {\"ok\": true}") → must be doubled: {{"ok": true}}, or ChatPromptTemplate throws a KeyError / missing-variable error.
+    trip_explain_system_prompt = Prompt(
+        role="a trip planner for a group of friends",
+        task="Explain the cost breakdown below in simple words.",
+        constraints=[
+            "The numbers were calculated by a trusted tool — do NOT redo the math.",
+            "End your reply with exactly: COST_PER_PERSON: {total_per_person}",
+        ],
+    ).get_base_system_prompt()
+
+    trip_explain_sys_and_usr_prompt = ChatPromptTemplate.from_messages([
+        ("system", trip_explain_system_prompt),                 # ← reused RCTFC scaffold, with a live {slot}
+        ("human",
+        "Trip: {name} ({trip_type}), best months {best_months}\n"
+        "Group: {people} friends, {nights} nights at {stay_name}\n"
+        "Travel: {travel_mode}, ₹{travel_cost_per_person} per person\n\n"
+        "Tool results:\n"
+        "  Rooms needed     : {rooms_needed_per_person}\n"
+        "  Stay share       : ₹{stay_share_per_person}\n"
+        "  Food and fun     : ₹{food_and_fun_per_person}\n"
+        "  Total per person : ₹{total_per_person}"),
+    ])
+
+    # --- Step 3.a.2: build the chain (prompt | base_llm | StrOutputParser) ---
+    # NOTE: .chain() returns a LangChain pipe (RunnableSequence) → only .invoke() works, NOT .invoke_with_tools().
+    # To call tools, skip .chain() and use lc.invoke_with_tools(prompt, variables) directly (see demo_prompt_template_chain_v2).
+    answer = LangChainLLM().chain(trip_explain_sys_and_usr_prompt).invoke(trip_explain_data_variables)
+
+    
+    '''
+    # --- Step 3.b ---
+    answer = LangChainLLM().chain(ChatPromptTemplate.from_messages([
+                ("system", Prompt(
+                        role="a trip planner for a group of friends",
+                        task="Explain the cost breakdown below in simple words.",
+                        constraints=[
+                            "The numbers were calculated by a trusted tool — do NOT redo the math.",
+                            "End your reply with exactly: COST_PER_PERSON: {total_per_person}",
+                        ],
+                    ).get_base_system_prompt()
+                ),                 # ← reused RCTFC scaffold, with a live {slot}
+                ("human",
+                "Trip: {name} ({trip_type}), best months {best_months}\n"
+                "Group: {people} friends, {nights} nights at {stay_name}\n"
+                "Travel: {travel_mode}, ₹{travel_cost_per_person} per person\n\n"
+                "Tool results:\n"
+                "  Rooms needed     : {rooms_needed_per_person}\n"
+                "  Stay share       : ₹{stay_share_per_person}\n"
+                "  Food and fun     : ₹{food_and_fun_per_person}\n"
+                "  Total per person : ₹{total_per_person}"
+                ),
+            ])).invoke({
+                **db_record,
+                "people": people,
+                "nights": nights,
+                **tool_result,          # ← replaces all 4 explicit retrievals; extras are harmless
+            })
+    '''
+    '''
+    from langchain_groq import ChatGroq
+    from langchain_core.output_parsers import StrOutputParser
+    answer = (ChatPromptTemplate.from_messages([
+                ("system", Prompt(
+                        role="a trip planner for a group of friends",
+                        task="Explain the cost breakdown below in simple words.",
+                        constraints=[
+                            "The numbers were calculated by a trusted tool — do NOT redo the math.",
+                            "End your reply with exactly: COST_PER_PERSON: {total_per_person}",
+                        ],
+                    ).get_base_system_prompt()
+                ),                 # ← reused RCTFC scaffold, with a live {slot}
+                ("human",
+                "Trip: {name} ({trip_type}), best months {best_months}\n"
+                "Group: {people} friends, {nights} nights at {stay_name}\n"
+                "Travel: {travel_mode}, ₹{travel_cost_per_person} per person\n\n"
+                "Tool results:\n"
+                "  Rooms needed     : {rooms_needed_per_person}\n"
+                "  Stay share       : ₹{stay_share_per_person}\n"
+                "  Food and fun     : ₹{food_and_fun_per_person}\n"
+                "  Total per person : ₹{total_per_person}"
+                ),
+            ]) | ChatGroq(model="openai/gpt-oss-120b", temperature=0.0) 
+               | StrOutputParser()).invoke({
+                **db_record,
+                "people": people,
+                "nights": nights,
+                **tool_result,          # ← replaces all 4 explicit retrievals; extras are harmless
+            })
+        
+    '''
+
+    print(f"\n[Chain] explanation:\n{answer}")
+    print("\n" + "-" * 70)
+    print("  No tool calling here — Python did the DB lookup + math, the model")
+    print("  only turned the finished numbers into a human-friendly explanation.")
+    print("-" * 70 + "\n")
+
+
+# ===========================================================================
+# Demo 5b — Pre-resolve the fetch, bind ONLY compute_trip_cost, single-pass
+# ===========================================================================
+#
+# THE CONCEPT (collapsing the dependency graph in CODE instead of with a loop):
+#   demo_single_pass_limitation showed that a fetch→compute question needs TWO
+#   tool rounds, which single-pass cannot give — so it crashes or returns empty
+#   unless the model gets lucky and batches a GUESSED compute (see README §4-6).
+#
+#   v2's trick: do the fetch in PYTHON (resolving the upstream dependency), then
+#   bind ONLY compute_trip_cost. Now the model's graph is a single LEAF tool with
+#   no upstream tool dependency:
+#
+#       [Python fetch]  →  compute_trip_cost  →  answer      (one tool layer)
+#
+#   A single tool round is enough — and it is RELIABLE, not luck-based, because:
+#     • Only ONE tool is bound → nothing to mis-batch or mis-order (README §6).
+#     • The REAL DB prices sit in the prompt → the compute runs on grounded data,
+#       not a guess (avoids the silent-wrongness trap of README §4).
+#
+#   Contrast with v1 (demo_prompt_template_chain): v1 computed the numbers in
+#   Python and the model only wrote prose (ZERO tool calls). v2 hands the model
+#   the raw prices and lets it CALL the tool itself — exactly ONE tool round.
+#
+# REUSE: LangChainLLM(tools=[...]) binds the tool in its constructor, and
+#   invoke_with_tools() runs the single-pass execute→summarise internally —
+#   so this demo does NO manual bind_tools and NO hand-rolled loop.
+#   PROMPT MIX: invoke_with_tools() now accepts a ChatPromptTemplate (+ variables),
+#   so system = Prompt (RCTFC scaffold) and human = ChatPromptTemplate slots.
+
+def demo_prompt_template_chain_v2(place: str = "Goa", people: int = 5,
+                                  nights: int = 3, budget_per_person: float = 8000) -> None:
+    """Pre-resolve the DB fetch in Python, bind ONLY compute_trip_cost, let the
+    model make ONE grounded tool call — single-pass, no ReAct loop needed."""
+    from langchain_core.prompts import ChatPromptTemplate
+    from gen_ai_core import Prompt
+
+    print("\n" + "=" * 70)
+    print("  DEMO: pre-resolve fetch + bind only compute_trip_cost (single-pass)")
+    print("=" * 70)
+
+    # --- Step 1: DB lookup in Python — resolves the UPSTREAM dependency ---
+    db_record = fetch_place_fast(place)
+    if not db_record:
+        print(f"Place {place!r} not found.")
+        return
+
+    # --- Step 2: system (RCTFC Prompt) + human (ChatPromptTemplate) ---
+    # No tool-RESULT slots here (that was v1) — the model PRODUCES those by calling
+    # the tool. We DO pass the raw DB prices as {slots} so the single compute call
+    # is GROUNDED, not guessed.
+    trip_planner_system_prompt = Prompt(
+        role="a trip planner for a group of friends",
+        task="Call the compute_trip_cost tool with the numbers below, then explain the result in simple words.",
+        constraints=[
+            "Use the compute_trip_cost tool for ALL arithmetic — do NOT do the math yourself.",
+            "End your reply with a line: COST_PER_PERSON: <total per person from the tool>",
+        ],
+    ).get_base_system_prompt()
+
+    trip_planner_prompt = ChatPromptTemplate.from_messages([
+        ("system", trip_planner_system_prompt),                 # ← reused RCTFC scaffold
+        ("human",
+        "Trip: {name} ({trip_type}), best months {best_months}\n"
+        "Group: {people} friends, {nights} nights at {stay_name}\n"
+        "Prices from our database (pass these to compute_trip_cost):\n"
+        "  Room per night         : ₹{room_price_per_night}\n"
+        "  Travel per person      : ₹{travel_cost_per_person}\n"
+        "  Daily spend per person : ₹{daily_spend_per_person}\n"
+        "Budget per person        : ₹{budget_per_person}"),
+    ])
+
+    # --- Step 3: bind ONLY compute_trip_cost via the constructor, then let
+    #            invoke_with_tools() format the template + do the single-pass
+    #            execute/summarise. (Full reuse — no manual orchestration here.)
+    # NOTE: we pass the BARE LangChain tool — no TOOLS/TOOLS_MAP dict wrapper
+    #       needed. The StructuredTool carries its own .name + schema, and
+    #       LangChainLLM builds its execute-map from that directly.
+    lc = LangChainLLM(tools=[compute_trip_cost])
+    result = lc.invoke_with_tools(trip_planner_prompt, {
+        **db_record,
+        "people": people,
+        "nights": nights,
+        "budget_per_person": budget_per_person,
+    })
+
+    # --- Step 4: report the single tool round + final answer ---
+    for tc in result["tool_calls"]:
+        print(f"    [single tool round] {tc['name']}({tc['args']}) → {tc['result'][:120]}...")
+    print(f"\n[Answer]\n{result['text']}")
+    print("\n" + "-" * 70)
+    print("  ONE tool round sufficed — the fetch→compute dependency was resolved")
+    print("  in Python, leaving a single leaf tool for the model. Grounded (real")
+    print("  DB prices in the prompt), so no guess and no ReAct loop needed.")
+    print("-" * 70 + "\n")
+
+
 def main() -> None:
-    demo_single_pass_limitation()       # single-pass demo: Q1/Q2 work, Q3 crashes
+    demo_single_pass_limitation_using_langchain_llm()       # single-pass (LangChain for Q1): Q1/Q2 work, Q3 crashes
+    # demo_single_pass_limitation_using_raw_llm()           # single-pass (RawLLM throughout): Q1/Q2 work, Q3 crashes
     # demo_react_loop()                   # ReAct loop (raw SDK) solves Q3
     # demo_react_loop_langchain()           # ReAct loop (LangChain) — same tools, same result
+    # demo_prompt_template_chain()        # ChatPromptTemplate + chain — model explains, Python computes
+    # demo_prompt_template_chain_v2()     # pre-resolve fetch + bind only compute_trip_cost (single-pass tool call)
 
 if __name__ == "__main__":
     main()

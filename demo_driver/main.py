@@ -84,6 +84,8 @@ def main() -> None:
     ])
 
 
+    # NOTE: .chain() returns a LangChain pipe (RunnableSequence) → only .invoke() works, NOT .invoke_with_tools().
+    # To call tools, skip .chain() and use lc.invoke_with_tools(prompt, variables) directly.
     r5 = lc.chain(trip_prompt).invoke(trip_data)
     print(f"[Chain][Trip Planner]\n{r5[:500]}")
 
@@ -127,9 +129,10 @@ def main() -> None:
         ),
     }
 
+    # NOTE: .chain() returns a LangChain pipe (RunnableSequence) → only .invoke() works, NOT .invoke_with_tools().
+    # To call tools, skip .chain() and use lc.invoke_with_tools(prompt, variables) directly.
     r6 = LangChainLLM(provider="ollama", model="llama3.1:8b").chain(budget_prompt).invoke(budget_data)
     print(f"[Chain][Budget Check]\n{r6[:500]}")
-
 
 if __name__ == "__main__":
     main()
