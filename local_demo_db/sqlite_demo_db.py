@@ -233,6 +233,26 @@ class SQLiteDemoDB:
             self._conn.commit()
             return cur.rowcount
 
+    def executemany(self, sql: str, seq_of_params: list[tuple]) -> int:
+        """Run one SQL statement against many parameter rows (bulk INSERT/UPDATE).
+
+        Thread-safe + auto-commits, same as execute(). Returns total rowcount.
+        """
+        with self._lock:
+            cur = self._conn.executemany(sql, seq_of_params)
+            self._conn.commit()
+            return cur.rowcount
+
+    def executescript(self, script: str) -> None:
+        """Run a multi-statement SQL script (e.g. several CREATE TABLEs at once).
+
+        Thread-safe. NOTE: sqlite3 commits any pending transaction before running
+        the script, and executescript takes no parameters (literals only).
+        """
+        with self._lock:
+            self._conn.executescript(script)
+            self._conn.commit()
+
     # -- DDL: write --------------------------------------------------------------
 
     def drop_tables(self, *table_names: str) -> None:
