@@ -20,7 +20,7 @@ import math
 
 from gen_ai_core import Prompt, RawLLM
 from gen_ai_core.llm.langchain_llm import LangChainLLM
-from tools_capability.demo_tools import compute_trip_cost
+from capability.demo_tools import compute_trip_cost
 from demo_driver.my_trip_planner_demo.sqlite_db_calls_demo import fetch_place_fast, fetch_place_fast_2
 
 
@@ -293,7 +293,7 @@ def demo_single_pass_limitation_using_raw_llm() -> None:
 #
 #      1. REUSE THE CONNECTION (the big win):
 #         Create the DB once and pass it in, or use a module-level singleton.
-#         This is what InventoryTools does in tools_capability/demo_tools.py:
+#         This is what InventoryTools does in capability/demo_tools.py:
 #         connect once in __init__, share self.db across all tool methods.
 #
 #      2. async/await (helps with LLM API calls, NOT with the DB lock):

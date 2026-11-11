@@ -29,16 +29,22 @@ def fetch_place_fast(place: str) -> dict | None:
     with _shared_db._lock:
         original_factory = _shared_db._conn.row_factory
         _shared_db._conn.row_factory = sqlite3.Row
-        cur = _shared_db._conn.cursor()
-        row = cur.execute("""
-            SELECT p.*, s.stay_name, s.room_price_per_night,
-                c.travel_mode, c.travel_cost_per_person, c.daily_spend_per_person
-            FROM places p
-            JOIN stays s ON s.place_id = p.place_id
-            JOIN costs c ON c.place_id = p.place_id
-            WHERE UPPER(p.place_id) = UPPER(?) OR UPPER(p.name) = UPPER(?)
-        """, (place, place)).fetchone()
-        _shared_db._conn.row_factory = original_factory
+        try:
+            cur = _shared_db._conn.cursor()
+
+            # Main Query
+            row = cur.execute("""
+                SELECT p.*, s.stay_name, s.room_price_per_night,
+                    c.travel_mode, c.travel_cost_per_person, c.daily_spend_per_person
+                FROM places p
+                JOIN stays s ON s.place_id = p.place_id
+                JOIN costs c ON c.place_id = p.place_id
+                WHERE UPPER(p.place_id) = UPPER(?) OR UPPER(p.name) = UPPER(?)
+            """, (place, place)).fetchone()
+        finally:
+            # restore even if the query raises, so the shared connection isn't
+            # left stuck on sqlite3.Row for every later query
+            _shared_db._conn.row_factory = original_factory
     return dict(row) if row else None
 
 
@@ -65,3 +71,22 @@ def fetch_place_fast_2(place: str) -> dict | None:
         WHERE UPPER(p.place_id) = UPPER(?) OR UPPER(p.name) = UPPER(?)
     """, (place, place))
     return dict(zip(cols, row)) if row else None
+
+def list_places() -> list[dict]:
+    """A short list of every destination."""
+    import sqlite3
+    with _shared_db._lock:
+        original_factory = _shared_db._conn.row_factory
+        _shared_db._conn.row_factory = sqlite3.Row
+        try:
+            cur = _shared_db._conn.cursor()
+
+            # Main Query
+            result = [dict(r) for r in cur.execute(
+                    "SELECT place_id, name, trip_type, best_months FROM places ORDER BY trip_type, name"
+                ).fetchall()]
+        finally:
+            # restore even if the query raises (see fetch_place_fast)
+            _shared_db._conn.row_factory = original_factory
+
+    return result
