@@ -11,7 +11,7 @@ Flow:
   → model calls compute_trip_cost with those prices
   → model writes a human-friendly summary
 
-Run with:  uv run --active python demo_driver/my_trip_planner_demo/my_trip_planner.py
+Run with:  uv run --active python demo_driver/my_trip_planner_demo/sample_demo_my_trip_planner.py
 """
 
 from __future__ import annotations
@@ -515,6 +515,39 @@ def demo_react_loop() -> None:
     print("-" * 70 + "\n")
 
 
+def demo_react_loop_v2() -> None:
+    """Same as demo_react_loop, but the loop lives INSIDE RawLLM.
+
+    demo_react_loop() wires the loop by hand (the standalone react_loop() harness).
+    v2 just calls RawLLM.invoke_with_multiple_tools_in_agentic_react_loop() — the
+    identical loop, now packaged on the class. Same result, far less demo code.
+    """
+    print("\n" + "=" * 70)
+    print("  DEMO: ReAct loop via RawLLM.invoke_with_multiple_tools_in_agentic_react_loop")
+    print("=" * 70)
+
+    llm = RawLLM(tools=TOOLS)
+    prompt_role = "a helpful trip cost planner for a group of friends"
+    q3 = "Compare Coorg vs Manali for 6 friends, 4 nights. Which is cheaper per person?"
+    print(f"\nQ: {q3}")
+
+    # The class method keeps tools bound every round — no manual harness needed.
+    result = llm.invoke_with_multiple_tools_in_agentic_react_loop(
+        Prompt(role=prompt_role, user_query=q3),
+        max_iterations=5,
+    )
+
+    print(f"\nA: {result['text']}")
+    print(f"   Tools used: {[tc['name'] for tc in result['tool_calls']]}")
+    print(f"   ReAct iterations: {result['iterations']}")
+    print(f"   Total latency: {result['latency_ms']:.0f} ms")
+
+    print("\n" + "-" * 70)
+    print("  Same multi-round result as demo_react_loop, but the loop is reused")
+    print("  from RawLLM — the demo no longer hand-rolls react_loop().")
+    print("-" * 70 + "\n")
+
+
 # ===========================================================================
 # Demo 4 — Same ReAct loop, but with LangChain instead of raw SDK
 # ===========================================================================
@@ -610,6 +643,39 @@ def demo_react_loop_langchain() -> None:
     print("\n" + "-" * 70)
     print("  Same result as react_loop (raw SDK), but using LangChain types.")
     print("  The tool functions and dispatch (_execute_tool) are shared.")
+    print("-" * 70 + "\n")
+
+
+def demo_react_loop_langchain_v2() -> None:
+    """Same as demo_react_loop_langchain, but the loop lives INSIDE LangChainLLM.
+
+    demo_react_loop_langchain() hand-binds the model (lc._llm.bind_tools(...)) and
+    drives react_loop_langchain() itself. v2 just constructs LangChainLLM(tools=TOOLS)
+    and calls invoke_with_multiple_tools_in_agentic_react_loop() — binding + the
+    multi-round loop are both handled by the class.
+    """
+    print("\n" + "=" * 70)
+    print("  DEMO: ReAct loop via LangChainLLM.invoke_with_multiple_tools_in_agentic_react_loop")
+    print("=" * 70)
+
+    lc = LangChainLLM(tools=TOOLS)           # constructor binds tools + builds the execute-map
+    prompt_role = "a helpful trip cost planner for a group of friends"
+    q3 = "Compare Coorg vs Manali for 6 friends, 4 nights. Which is cheaper per person?"
+    print(f"\nQ: {q3}")
+
+    result = lc.invoke_with_multiple_tools_in_agentic_react_loop(
+        Prompt(role=prompt_role, user_query=q3),
+        max_iterations=5,
+    )
+
+    print(f"\nA: {result['text']}")
+    print(f"   Tools used: {[tc['name'] for tc in result['tool_calls']]}")
+    print(f"   ReAct iterations: {result['iterations']}")
+    print(f"   Total latency: {result['latency_ms']:.0f} ms")
+
+    print("\n" + "-" * 70)
+    print("  Same multi-round result as demo_react_loop_langchain, but the loop is")
+    print("  reused from LangChainLLM — no manual bind_tools, no hand-rolled loop.")
     print("-" * 70 + "\n")
 
 
@@ -791,7 +857,7 @@ def demo_prompt_template_chain(place: str = "Goa", people: int = 5,
 # THE CONCEPT (collapsing the dependency graph in CODE instead of with a loop):
 #   demo_single_pass_limitation showed that a fetch→compute question needs TWO
 #   tool rounds, which single-pass cannot give — so it crashes or returns empty
-#   unless the model gets lucky and batches a GUESSED compute (see README §4-6).
+#   unless the model gets lucky and batches a GUESSED compute (see LEARNER-NOTES §4-6).
 #
 #   v2's trick: do the fetch in PYTHON (resolving the upstream dependency), then
 #   bind ONLY compute_trip_cost. Now the model's graph is a single LEAF tool with
@@ -800,9 +866,9 @@ def demo_prompt_template_chain(place: str = "Goa", people: int = 5,
 #       [Python fetch]  →  compute_trip_cost  →  answer      (one tool layer)
 #
 #   A single tool round is enough — and it is RELIABLE, not luck-based, because:
-#     • Only ONE tool is bound → nothing to mis-batch or mis-order (README §6).
+#     • Only ONE tool is bound → nothing to mis-batch or mis-order (LEARNER-NOTES §6).
 #     • The REAL DB prices sit in the prompt → the compute runs on grounded data,
-#       not a guess (avoids the silent-wrongness trap of README §4).
+#       not a guess (avoids the silent-wrongness trap of LEARNER-NOTES §4).
 #
 #   Contrast with v1 (demo_prompt_template_chain): v1 computed the numbers in
 #   Python and the model only wrote prose (ZERO tool calls). v2 hands the model
@@ -885,7 +951,9 @@ def main() -> None:
     demo_single_pass_limitation_using_langchain_llm()       # single-pass (LangChain for Q1): Q1/Q2 work, Q3 crashes
     # demo_single_pass_limitation_using_raw_llm()           # single-pass (RawLLM throughout): Q1/Q2 work, Q3 crashes
     # demo_react_loop()                   # ReAct loop (raw SDK) solves Q3
+    # demo_react_loop_v2()                # ReAct loop via RawLLM.invoke_with_multiple_tools_in_agentic_react_loop
     # demo_react_loop_langchain()           # ReAct loop (LangChain) — same tools, same result
+    # demo_react_loop_langchain_v2()      # ReAct loop via LangChainLLM.invoke_with_multiple_tools_in_agentic_react_loop
     # demo_prompt_template_chain()        # ChatPromptTemplate + chain — model explains, Python computes
     # demo_prompt_template_chain_v2()     # pre-resolve fetch + bind only compute_trip_cost (single-pass tool call)
 

@@ -141,7 +141,7 @@ class LangChainLLM:
         runs exactly one tool round (and fails on questions needing a second),
         this loop re-sends the tools each turn — so sequential / multi-entity
         questions ("compare A vs B") work. Mirrors react_loop_langchain() in
-        demo_driver/my_trip_planner_demo/my_trip_planner.py.
+        demo_driver/my_trip_planner_demo/sample_demo_my_trip_planner.py.
 
         `prompt`: Prompt | ChatPromptTemplate (+ variables) | message list | str.
         Returns: dict with keys text, tool_calls, iterations, latency_ms.

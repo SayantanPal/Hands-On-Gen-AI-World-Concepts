@@ -45,7 +45,7 @@ print(res.text, res.tool_calls)
 > **Single-pass limitation:** `RawLLM` runs exactly **one** round of tool calls, then removes
 > the tools and forces a text reply (`kwargs.pop("tools")`). A question that needs two
 > sequential rounds (e.g. "compare A vs B") **crashes** with `400 - Tool choice is none, but
-> model called a tool`. See `demo_driver/my_trip_planner_demo/README.md` for the full story
+> model called a tool`. See `demo_driver/my_trip_planner_demo/LEARNER-NOTES.md` for the full story
 > and the ReAct-loop fix.
 
 ### Multi-round (ReAct loop) — `invoke_with_multiple_tools_in_agentic_react_loop(...)`
@@ -166,13 +166,13 @@ Same flexible `prompt` input as (c). This is the LangChain twin of
 Both are **single-pass** by default for tools. For multi-round / multi-entity questions, call
 `invoke_with_multiple_tools_in_agentic_react_loop(...)` on either class — it keeps tools bound
 every round. The same loop is also shown step-by-step as `react_loop` / `react_loop_langchain`
-in `demo_driver/my_trip_planner_demo/` (see its `README.md`).
+in `demo_driver/my_trip_planner_demo/` (see its `LEARNER-NOTES.md`).
 
 ---
 
 ## 5. Worked demos
 
-All of these live in `demo_driver/my_trip_planner_demo/my_trip_planner.py`:
+All of these live in `demo_driver/my_trip_planner_demo/sample_demo_my_trip_planner.py`:
 
 - `demo_single_pass_limitation_using_langchain_llm` / `demo_single_pass_limitation_using_raw_llm`
   — single-pass; Q1/Q2 work, Q3 (compare) crashes. Why multi-round needs a loop.

@@ -284,7 +284,7 @@ return the first turn that has text and no tool_calls
 ```
 
 That is exactly what `react_loop()` (raw SDK) and `react_loop_langchain()` (LangChain) do in
-`my_trip_planner.py`. In a ReAct loop:
+`sample_demo_my_trip_planner.py`. In a ReAct loop:
 
 - Q1 safely does `fetch → compute → answer` across rounds.
 - Q2 works whether the model batches *or* sequences.
@@ -434,10 +434,10 @@ unavoidable when you can't pre-resolve the fetches.)*
   execution and looping are the developer's responsibility):
   https://docs.langchain.com/oss/python/langchain/overview
 - **In this repo:**
-  - `my_trip_planner.py` → `demo_single_pass_limitation()` (Q1/Q2/Q3 single-pass)
-  - `my_trip_planner.py` → `react_loop()` / `react_loop_langchain()` (the loop fix)
-  - `my_trip_planner.py` → `demo_prompt_template_chain()` (v1: zero tool calls, Python computes)
-  - `my_trip_planner.py` → `demo_prompt_template_chain_v2()` (v2: pre-resolve fetch, one grounded tool call)
+  - `sample_demo_my_trip_planner.py` → `demo_single_pass_limitation()` (Q1/Q2/Q3 single-pass)
+  - `sample_demo_my_trip_planner.py` → `react_loop()` / `react_loop_langchain()` (the loop fix)
+  - `sample_demo_my_trip_planner.py` → `demo_prompt_template_chain()` (v1: zero tool calls, Python computes)
+  - `sample_demo_my_trip_planner.py` → `demo_prompt_template_chain_v2()` (v2: pre-resolve fetch, one grounded tool call)
   - `gen_ai_core/llm/raw_llm.py` → `kwargs.pop("tools", None)` (why RawLLM crashes round 2)
   - `gen_ai_core/llm/langchain_llm.py` → `invoke_with_tools()` (single-pass; auto-detects
     LangChain `.invoke` vs plain-callable tools; accepts Prompt / ChatPromptTemplate / message

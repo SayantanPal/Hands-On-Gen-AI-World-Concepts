@@ -245,7 +245,7 @@ class RawLLM:
         This is the multi-round cousin of generate_response_content(), which is
         single-pass (drops tools after one round and thus crashes on questions
         needing a second). Mirrors react_loop() in
-        demo_driver/my_trip_planner_demo/my_trip_planner.py.
+        demo_driver/my_trip_planner_demo/sample_demo_my_trip_planner.py.
 
         Supported providers: openai / groq / ollama (chat.completions API).
         For anthropic / gemini / sap, use generate_response_content (single pass)
