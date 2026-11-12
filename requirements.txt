@@ -1,7 +1,9 @@
+# paste your key. Never commit .env file
+
 langchain>=1.4.0,<2.0.0
 langgraph>=1.2.0,<2.0.0
 requests>=2.31.0
-pandas 
+pandas>=2.2
 cryptography 
 pypdf
 
@@ -21,7 +23,7 @@ langchain-ollama>=1.1.0
 # for Groq Provider Hosted LLMs
 langchain-groq>=1.1.0,<2.0.0
 strands-agents[openai]>=1.60.0,<2.0.0
-python-dotenv>=1.0.0
+python-dotenv>=1.0
 
 
 # For Inbuilt Tools
@@ -74,3 +76,6 @@ mcp>=1.0.0,<2.0.0
 hana-ml
 hdbcli
 sap-ai-sdk-gen[all]==7.4.1
+
+# For OpenAI Agents SDK
+openai-agents>=0.4
