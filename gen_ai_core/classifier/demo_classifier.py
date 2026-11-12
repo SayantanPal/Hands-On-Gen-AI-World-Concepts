@@ -10,7 +10,7 @@ headlines = [
 ]
 
 
-def witness_small_classifier_speed_over_a_llm() -> None:
+def witness_small_label_classifier_speed_over_a_full_text_generating_llm() -> None:
     for h in headlines:
         print(h, "→", finbert(h)[0])     # e.g. {'label': 'positive', 'score': 0.93}
 
@@ -18,7 +18,7 @@ def witness_small_classifier_speed_over_a_llm() -> None:
 def main():
     # Notice the speed: no prompt, no JSON — just a label and a confidence score. 
     # That is why a specialised small model often beats a giant chat model for one narrow, high-volume job.
-    witness_small_classifier_speed_over_a_llm()
+    witness_small_label_classifier_speed_over_a_full_text_generating_llm()
 
 # Run File using:
 # uv run --active python gen_ai_core/classifier/demo_classifier.py
