@@ -141,6 +141,112 @@ TOOL_FN_MAP = {t["name"]: t["function"] for t in TOOLS}
 #   handle multi-step reasoning where the model's next tool call depends on
 #   a previous tool call's result.
 
+def demo_my_trip_cost_breakdown_using_lc_llm_with_no_tools_call() -> None:
+    from langchain_core.prompts import ChatPromptTemplate
+    # NOTE: .chain() returns a LangChain pipe (RunnableSequence) → only .invoke() works, NOT .invoke_with_tools().
+    # To call tools, skip .chain() and use lc.invoke_with_tools(prompt, variables) directly.
+    cost_breakdown_ans_response = LangChainLLM(
+                                                # provider="ollama", model="llama3.1:8b"
+                                            ).chain(
+                                                        ChatPromptTemplate.from_messages(
+                                                            [
+                                                                ("system", Prompt(
+                                                                                    role = "a trip planner for a group of friends",
+                                                                                    context = (
+                                                                                                "The numbers below were calculated by a trusted tool.\n"
+                                                                                                "Trip: {name} ({trip_type}), best months {best_months}."
+                                                                                            ),
+                                                                                    task = (
+                                                                                            "Explain the cost breakdown in simple words.\n"
+                                                                                            "End with: COST_PER_PERSON: ₹{total_per_person}"
+                                                                                        ),
+                                                                                    constraints=[
+                                                                                        "Do NOT recalculate the numbers — use the tool results as-is.",
+                                                                                        "Keep the explanation under 100 words.",
+                                                                                    ],
+                                                                                ).get_base_system_prompt()
+                                                                ),
+                                                                ("human",  (
+                                                                            "Group: {people} friends, {nights} nights at {stay_name}\n"
+                                                                            "Travel: {travel_mode}, ₹{travel_cost_per_person} per person\n\n"
+                                                                            "Tool results:\n"
+                                                                            "  Rooms needed     : {rooms_needed}\n"
+                                                                            "  Stay share       : ₹{stay_share}\n"
+                                                                            "  Food and fun     : ₹{food_and_fun}\n"
+                                                                            "  Total per person : ₹{total_per_person}"
+                                                                            )
+                                                                ),
+                                                            ]
+                                                        )
+                                                ).invoke(
+                                                    {
+                                                        "name": "Goa Beach Trip",
+                                                        "trip_type": "beach",
+                                                        "best_months": "Oct–Feb",
+                                                        "people": 5,
+                                                        "nights": 3,
+                                                        "stay_name": "Seaside Hostel",
+                                                        "travel_mode": "train",
+                                                        "travel_cost_per_person": 1200,
+                                                        "rooms_needed": 2,
+                                                        "stay_share": 900,
+                                                        "food_and_fun": 2000,
+                                                        "total_per_person": 4100,
+                                                    }
+                                                )
+    print(f"[Chain][Trip Planner]\n{cost_breakdown_ans_response[:500]}")
+
+    print("\n\n")
+
+def demo_my_trip_budget_decision_analysis_using_lc_llm_with_no_tools_call() -> None:
+    from langchain_core.prompts import ChatPromptTemplate
+    # NOTE: .chain() returns a LangChain pipe (RunnableSequence) → only .invoke() works, NOT .invoke_with_tools().
+    # To call tools, skip .chain() and use lc.invoke_with_tools(prompt, variables) directly.
+    cost_breakdown_ans_response = LangChainLLM(
+                                                    # provider="ollama", model="llama3.1:8b"
+                                                ).chain(
+                                                        ChatPromptTemplate.from_messages(
+                                                            [
+                                                                ("system", Prompt(
+                                                                                    role = "the group's money-minded friend",
+                                                                                    context = (
+                                                                                                "Money left per person = budget - total cost per person."
+                                                                                            ),
+                                                                                    task = (
+                                                                                                "Say clearly: GO (within budget) or NOT YET (over budget).\n"
+                                                                                                "If over budget, suggest one simple change "
+                                                                                                "(fewer nights, cheaper place, or more friends)."
+                                                                                            ),
+                                                                                    output_format="One word verdict (GO / NOT YET), then one sentence explanation.",
+                                                                                    constraints=[
+                                                                                        "Never encourage overspending.",
+                                                                                        "Keep the suggestion practical and specific.",
+                                                                                    ],
+                                                                                ).get_base_system_prompt()
+                                                                ),
+                                                                ("human",  (
+                                                                                "Trip: {name} | Budget per person: ₹{budget_per_person}\n\n"
+                                                                                "Cost breakdown:\n{breakdown}"
+                                                                            )
+                                                                ),
+                                                            ]
+                                                        )
+                                                ).invoke(
+                                                            {
+                                                                "name": "Goa Beach Trip",
+                                                                "budget_per_person": 5000,
+                                                                "breakdown": (
+                                                                    "  Travel : ₹1200\n"
+                                                                    "  Stay   : ₹900\n"
+                                                                    "  Food   : ₹2000\n"
+                                                                    "  Total  : ₹4100"
+                                                                ),
+                                                            }
+                                                        )
+    print(f"[Chain][Trip Planner]\n{cost_breakdown_ans_response[:500]}")
+
+    print("\n\n")
+
 def demo_single_pass_limitation_using_langchain_llm() -> None:
     """Same single-pass limitation demo, driven entirely by LangChainLLM.
 
@@ -995,22 +1101,28 @@ def demo_prompt_template_chain_with_llm_implicit_tool_calling_and_with_manual_se
                                                                 {
                                                                     "name":                         db_record["name"],
                                                                     "budget_per_person":            budget_per_person,
-                                                                    "budget_cost_breakdown":        budget_cost_breakdown,      # ← llm-1's output is llm-2's input
+                                                                    "budget_cost_breakdown":        budget_cost_breakdown,      # ← llm-1's output is feedback cascaded to llm-2's input
                                                                 }
                                         )
     print(f"\n--- Go or Not Yet ---\n{trip_decision_result['text']}")
 
 
 def main() -> None:
-    # demo_single_pass_limitation_using_langchain_llm()       # single-pass (LangChain for Q1): Q1/Q2 work, Q3 crashes
-    # demo_single_pass_limitation_using_raw_llm()           # single-pass (RawLLM throughout): Q1/Q2 work, Q3 crashes
-    # demo_react_loop()                   # ReAct loop (raw SDK) solves Q3
-    # demo_react_loop_v2()                # ReAct loop via RawLLM.invoke_with_multiple_tools_in_agentic_react_loop
-    # demo_react_loop_langchain()           # ReAct loop (LangChain) — same tools, same result
-    # demo_react_loop_langchain_v2()      # ReAct loop via LangChainLLM.invoke_with_multiple_tools_in_agentic_react_loop
-    # demo_prompt_template_chain_with_manual_tool_calling()        # ChatPromptTemplate + chain — model explains, Python computes
-    # demo_prompt_template_chain_with_llm_implicit_tool_calling()     # pre-resolve fetch + bind only compute_trip_cost (single-pass tool call)
+    demo_my_trip_cost_breakdown_using_lc_llm_with_no_tools_call()
+    demo_my_trip_budget_decision_analysis_using_lc_llm_with_no_tools_call()
     demo_prompt_template_chain_with_llm_implicit_tool_calling_and_with_manual_seq_pipeline_cascading()
+    
+    demo_single_pass_limitation_using_langchain_llm()             # single-pass (LangChain for Q1): Q1/Q2 work, Q3 crashes
+    demo_single_pass_limitation_using_raw_llm()                   # single-pass (RawLLM throughout): Q1/Q2 work, Q3 crashes
+    
+    demo_prompt_template_chain_with_manual_tool_calling()         # ChatPromptTemplate + chain — model explains, Python computes
+    demo_prompt_template_chain_with_llm_implicit_tool_calling()   # pre-resolve fetch + bind only compute_trip_cost (single-pass tool call)
+    
+    demo_react_loop()                                             # ReAct loop (raw SDK) solves Q3
+    demo_react_loop_v2()                                          # ReAct loop via RawLLM.invoke_with_multiple_tools_in_agentic_react_loop
+    demo_react_loop_langchain()                                   # ReAct loop (LangChain) — same tools, same result
+    demo_react_loop_langchain_v2()                                # ReAct loop via LangChainLLM.invoke_with_multiple_tools_in_agentic_react_loop
+
 
 if __name__ == "__main__":
     main()

@@ -47,9 +47,17 @@ def check_langchain_llm_setup() -> None:
             "(check the key, the model name in LLM_MODEL, and your billing)")
 
 
+
+def check_setup() -> None:
+    check_python_version()
+    print("\n")
+    check_raw_llm_setup()
+    print("\n")
+    check_langchain_llm_setup()
+    print("\n")
+
+
 # To Prevent auto-execution on importing method name in other classes
 # unless explicitly called for consumption/usage via manual method call trigger or using python command on direct file execution
 if __name__ == "__main__":
-    check_python_version()
-    check_raw_llm_setup()
-    check_langchain_llm_setup()
+    check_setup()

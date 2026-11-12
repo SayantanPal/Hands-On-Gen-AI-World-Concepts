@@ -1350,6 +1350,15 @@ wheels = [
 ]
 
 [[package]]
+name = "griffelib"
+version = "2.4.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/e2/0f5d8ed08766bc6dcd3eebf5a6623d83cbca33a6e4c90aef57156ce745ad/griffelib-2.4.1.tar.gz", hash = "sha256:40c028dd2e623f464423f0e11e3c553158f1cf4f1368239a370534d73e1407ff", size = 245153, upload-time = "2026-10-22T11:20:03.705Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/02/1156d5f5307f573b901b14373848b84e69ca6cab09169b8cc97d16a181f9/griffelib-2.4.1-py3-none-any.whl", hash = "sha256:76bc562f936ad1ce198d2cf6d0731bd5c92a7d934b69ef828ef22ee0ffdb62ce", size = 172983, upload-time = "2026-10-22T11:19:59.843Z" },
+]
+
+[[package]]
 name = "groovy"
 version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1488,6 +1497,7 @@ dependencies = [
     { name = "langgraph" },
     { name = "langgraph-checkpoint-aws" },
     { name = "mcp" },
+    { name = "openai-agents" },
     { name = "pandas" },
     { name = "pip" },
     { name = "pypdf" },
@@ -1515,7 +1525,7 @@ requires-dist = [
     { name = "hdbcli", specifier = ">=2.30.27" },
     { name = "ipykernel", specifier = ">=7.4.0" },
     { name = "langchain", specifier = ">=1.4.0,<2.0.0" },
-    { name = "langchain-anthropic", specifier = ">=1.7.10" },
+    { name = "langchain-anthropic", specifier = ">=1.7.0" },
     { name = "langchain-aws", specifier = ">=1.7.0,<2.0.0" },
     { name = "langchain-core", specifier = ">=1.6.0,<2.0.0" },
     { name = "langchain-groq", specifier = ">=1.1.0,<2.0.0" },
@@ -1525,10 +1535,11 @@ requires-dist = [
     { name = "langgraph", specifier = ">=1.2.0,<2.0.0" },
     { name = "langgraph-checkpoint-aws", specifier = ">=1.2.0,<2.0.0" },
     { name = "mcp", specifier = ">=1.0.0,<2.0.0" },
-    { name = "pandas", specifier = ">=3.1.1" },
+    { name = "openai-agents", specifier = ">=0.4" },
+    { name = "pandas", specifier = ">=2.2" },
     { name = "pip", specifier = ">=26.3" },
     { name = "pypdf", specifier = ">=6.21.4" },
-    { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "python-dotenv", specifier = ">=1.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "sap-ai-sdk-gen", extras = ["all"], specifier = "==7.4.1" },
     { name = "sentence-transformers", specifier = ">=3.0.0" },
@@ -3200,6 +3211,29 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/34/b6/23cddcb571d6eafe7b4bb58c7e0a068076121b7b001b776179994cca6a03/openai-3.46.0.tar.gz", hash = "sha256:fb34cd8cab6809ad0aa8dc42493fa622aaa87c814fd8e67a6fb3fa1f1e5d952d", size = 2408622, upload-time = "2026-11-05T00:55:55.463Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f4/63/454e6faad68ac903e7669932db8d0a91c95dfca829ec9476e52045b17684/openai-3.46.0-py3-none-any.whl", hash = "sha256:7b650117e9bf539029bf880c2eff94a26f281394f6572284efa5d068d4b1c98e", size = 2438918, upload-time = "2026-11-05T00:55:53.301Z" },
+]
+
+[[package]]
+name = "openai-agents"
+version = "0.24.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "griffelib" },
+    { name = "httpx2" },
+    { name = "mcp" },
+    { name = "openai" },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+    { name = "python-multipart" },
+    { name = "requests" },
+    { name = "starlette" },
+    { name = "typing-extensions" },
+    { name = "urllib3" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a5/36/537006bc2a22f3aa232ce0907f52a333f831a6a2f525894ff43747a7abee/openai_agents-0.24.0.tar.gz", hash = "sha256:4b4b285f4fed81fdf1b4ac426a9101658d9cd29b4fb1aaeee18f639b77e704e3", size = 7026950, upload-time = "2026-10-15T02:38:21.466Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/93/01efc034d7011b89381f96a9fb8957c09a16e3c190f3a5de128e1d0a42e9/openai_agents-0.24.0-py3-none-any.whl", hash = "sha256:18d4ac34e84ed937333ec8ce46395ed3521ffcbb0a521780a4c2eaa451467f49", size = 1242571, upload-time = "2026-10-15T02:38:18.835Z" },
 ]
 
 [[package]]
