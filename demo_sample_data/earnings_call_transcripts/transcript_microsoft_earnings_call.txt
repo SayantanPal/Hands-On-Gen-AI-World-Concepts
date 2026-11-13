@@ -1,0 +1,11 @@
+Microsoft delivered a strong finish to fiscal 2025, reporting quarterly revenue of $76.4 billion, up 18% year-over-year, with diluted EPS of $3.65, increasing 24%. 
+Microsoft Cloud revenue reached $46.7 billion, growing 27%, while Azure and other cloud services revenue increased 39%, driven by sustained enterprise demand and AI workloads. 
+Management highlighted the growing adoption of Microsoft 365 Copilot, GitHub Copilot, Azure AI services, and enterprise cloud infrastructure. 
+Commercial bookings exceeded $100 billion, reflecting strong customer commitments and long-term contracts. 
+However, AI infrastructure expansion is creating significant capital expenditure requirements, with Q1 FY2026 capital expenditure expected to exceed $30 billion. 
+Management expects another year of double-digit revenue and operating income growth in FY2026, while operating margins are expected to remain relatively unchanged. 
+Azure revenue growth is expected to be approximately 37% in constant currency in the coming quarter, although capacity constraints may continue through the first half of the fiscal year. 
+Key risks include infrastructure costs, limited data center capacity, AI monetization timelines, and competition in cloud services. 
+The overall outlook remains positive, supported by contracted backlog and growing enterprise AI adoption.
+
+Source: https://www.microsoft.com/en-us/investor/events/fy-2025/earnings-fy-2025-q4

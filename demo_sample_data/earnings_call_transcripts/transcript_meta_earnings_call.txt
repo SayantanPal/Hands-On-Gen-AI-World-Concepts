@@ -1,0 +1,8 @@
+Meta Platforms delivered a strong second quarter in 2025, reporting revenue of approximately $47.52 billion, up 22% year-over-year, while diluted EPS reached $7.14 and net income increased to approximately $18.3 billion. 
+Advertising remained the primary revenue driver, benefiting from improvements in AI-powered ad targeting, recommendation algorithms, and advertiser conversion rates across Facebook and Instagram. 
+Management highlighted continued investment in generative AI, Llama models, Meta AI, and large-scale computing infrastructure, including the development of next-generation AI data centers. 
+The company also emphasized improvements in user engagement and monetization across its family of applications. However, operating expenses and capital expenditure requirements are expected to increase substantially as Meta accelerates its AI infrastructure buildout and talent investments. 
+For Q3 2025, management guided for revenue between $47.5 billion and $50.5 billion. Full-year 2025 capital expenditure expectations were between $66 billion and $72 billion. Key risks include regulatory scrutiny, privacy restrictions, advertising market cyclicality, competition from other social platforms, and the uncertain return on large-scale AI investments. 
+The outlook remains constructive, with advertising growth providing strong near-term cash generation while AI is positioned as a major long-term growth opportunity.
+
+Source: https://www.marketbeat.com/earnings/reports/2025-7-30-facebook-inc-stock/, https://investor.atmeta.com/investor-events/

@@ -1,21 +1,20 @@
-from transformers import pipeline
+from gen_ai_core.llm.local_transformers_llm import TransformersLLM
 
-# a classifier in action (runs on a laptop CPU)
-# FinBERT is a classifier: sentence in → label out. It cannot write text.
-finbert = pipeline("text-classification", model="ProsusAI/finbert")
-
-headlines = [
-    "Apple reports record-breaking revenue in Q4 despite market slowdown",
-    "Tesla stock falls after earnings miss expectations",
-]
-
-
+# sentiment analysis
 def witness_small_label_classifier_speed_over_a_full_text_generating_llm() -> None:
+    finbert = TransformersLLM().get_simple_text_label_classifier_model()
+    headlines = [
+        "Apple reports record-breaking revenue in Q4 despite market slowdown", # Positive
+        "Tesla stock falls after earnings miss expectations", # Negative
+        "Amazon maintains steady growth amid economic slowdown", # Neutral
+        "Nvidia shares surge after strong AI chip demand drives record quarterly revenue" # Positive
+    ]
+    ]
     for h in headlines:
         print(h, "→", finbert(h)[0])     # e.g. {'label': 'positive', 'score': 0.93}
 
 
-def main():
+def demo_classifier():
     # Notice the speed: no prompt, no JSON — just a label and a confidence score. 
     # That is why a specialised small model often beats a giant chat model for one narrow, high-volume job.
     witness_small_label_classifier_speed_over_a_full_text_generating_llm()
@@ -35,4 +34,4 @@ vocab.txt: 100%|█████████████████████�
 special_tokens_map.json: 100%|████████████████████████████████████████████████████| 112/112 [00:00<00:00, 196kB/s]
 '''
 if __name__ == "__main__":
-    main()
+    demo_classifier()

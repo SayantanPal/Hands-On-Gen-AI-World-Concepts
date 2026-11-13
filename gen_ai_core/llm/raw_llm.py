@@ -13,6 +13,7 @@ from gen_ai_core.prompts.prompt import Prompt
 class RawLLM:
 
     def __init__(self, settings: Settings | None = None,
+                 provider: str | None = None, model: str | None = None,
                  tools: list[dict[str, Any]] | None = None):
         """
         Args:
@@ -24,8 +25,8 @@ class RawLLM:
                       - function:    Callable — the actual Python function to execute
         """
         self.s = settings or get_settings()
-        self._provider = self.s.llm_provider
-        self._model: str | None = self.s.default_llm
+        self._provider = provider or self.s.llm_provider
+        self._model: str | None = model or self.s.default_llm
         self._llm_temperature: float = self.s.llm_temperature or 0.0
         self._max_tokens = self.s.max_tokens or 700
         self._reasoning_effort = self.s.reasoning_effort
@@ -331,6 +332,7 @@ class RawLLM:
     def _gen_openai_compatible(self, prompt: Prompt, json_mode: bool = False, t0: float = time.perf_counter(), max_tokens: int | None = None, temperature: float | None = None) -> LLMResult:
         kwargs: dict[str, Any] = {"model": self._model, "messages": prompt.to_role_dicts()}
         if json_mode:
+            # {"format": {"type": "json_object"}} switches on JSON mode: the model must return valid JSON.
             kwargs["response_format"] = {"type": "json_object"}
         if temperature is not None:
             kwargs["temperature"] = temperature

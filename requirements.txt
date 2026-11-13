@@ -68,6 +68,10 @@ langchain-openai>=0.3.0
 # For HuggingFace embeddings
 sentence-transformers>=3.0.0
 
+# For local HuggingFace model inference via transformers.pipeline
+transformers>=4.45.0
+accelerate>=1.0.0
+
 # For MCP demo (capability/mcp_demo) — pin to v1: code uses FastMCP,
 # which v2 renamed to MCPServer with API changes
 mcp>=1.0.0,<2.0.0

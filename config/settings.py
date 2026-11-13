@@ -29,19 +29,20 @@ def _auto_provider() -> str:
     explicit = _env("LLM_PROVIDER").lower()
     if explicit:
         return explicit
+    # Placed Priority-wise: prioritise free-tier API providers and local LLMs over paid-tiers 
     if _env("GROQ_API_KEY"):
         return "groq"
     if _env("OLLAMA_LOCAL_BASE_URL"):
         return "ollama"
+    if _env("GOOGLE_API_KEY"):
+        return "gemini"
     if _env("OPENAI_API_KEY"):
         return "openai"
     if _env("ANTHROPIC_API_KEY"):
         return "anthropic"
-    if _env("GOOGLE_API_KEY"):
-        return "gemini"
     return "none"
 
-# provides default models from api providers
+# provides default models from api providers {key: provider, value: model_name}
 DEFAULT_MODELS: dict[str, str] = {
     "openai":    "gpt-6-luna", # cheap, fast OpenAI model (replaces gpt-4.1-mini / gpt-4o-mini)
     "groq":      "openai/gpt-oss-120b",
@@ -49,7 +50,10 @@ DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-haiku-5-5", # cheap, fast Anthropic model
     "gemini":    "gemini-2.5-flash",
     "sap":       "gpt-4o",
+    "local_transformers": "meta-llama/Llama-3.1-8B-Instruct", # default local transformers model
 }
+
+DEFAULT_LOCAL_TRANSFORMERS_MODEL = "microsoft/Phi-3-mini-4k-instruct" #"meta-llama/Llama-3.1-8B-Instruct"
 
 @dataclass
 class Settings:
@@ -61,6 +65,7 @@ class Settings:
     max_tokens: int = field(default_factory=lambda: int(_env("LLM_MAX_TOKENS", "700")))
     reasoning_effort: str = field(default_factory=lambda: _env("LLM_REASONING_EFFORT", "none"))
     openai_base_url: str = field(default_factory=lambda: _env("OPENAI_BASE_URL"))
+    local_transformers_model: str = field(default_factory=lambda: _env("LOCAL_TRANSFORMER_MODEL", DEFAULT_LOCAL_TRANSFORMERS_MODEL))
 
     def __post_init__(self) -> None:
         # IF default LLM model is explicitly not provided, detect it from llm provider vendor

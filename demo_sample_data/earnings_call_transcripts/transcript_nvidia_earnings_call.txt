@@ -1,0 +1,10 @@
+NVIDIA reported record quarterly revenue of $46.74 billion for Q2 FY2026, representing approximately 56% year-over-year growth, while GAAP diluted EPS increased 61% to $1.08. 
+Data Center demand remained the primary growth driver as hyperscalers and enterprise customers continued investing heavily in AI infrastructure. 
+Management highlighted strong adoption of its Blackwell GPU platform, expansion of networking solutions, and growing demand for AI training and inference workloads. 
+GAAP gross margin was 72.4%, reflecting product mix and inventory-related factors, while operating expenses increased as the company invested in infrastructure, engineering, and product development. 
+For Q3 FY2026, management guided for revenue of approximately $54 billion, plus or minus 2%, and non-GAAP gross margin of approximately 73.5%. 
+The company remains optimistic about long-term AI infrastructure spending and expects continued demand for its next-generation computing platforms. 
+However, geopolitical tensions and US export restrictions affecting China shipments remain significant risks, alongside supply-chain capacity, customer concentration, and the possibility of elevated AI infrastructure spending moderating. 
+The outlook remains strongly positive, although execution and regulatory developments will be important to sustaining growth.
+
+Source: https://s201.q4cdn.com/141608511/files/doc_financials/2026/q2/NVDA-Q2-2026-Earnings-Call-27-August-2025-5_00-PM-ET.pdf, https://nvidianews.nvidia.com/_gallery/download_pdf/68af69043d6332f1d02dec91/
