@@ -13,7 +13,7 @@ from gen_ai_core.prompts.prompt import Prompt
 class RawLLM:
 
     def __init__(self, settings: Settings | None = None,
-                 provider: str | None = None, model: str | None = None,
+                 provider: str | None = None, model: str | None = None, vision_model: str | None = None,
                  tools: list[dict[str, Any]] | None = None):
         """
         Args:
@@ -27,6 +27,7 @@ class RawLLM:
         self.s = settings or get_settings()
         self._provider = provider or self.s.llm_provider
         self._model: str | None = model or self.s.default_llm
+        self._vision_model: str | None = vision_model or self.s.vision_language_model
         self._llm_temperature: float = self.s.llm_temperature or 0.0
         self._max_tokens = self.s.max_tokens or 700
         self._reasoning_effort = self.s.reasoning_effort
@@ -36,7 +37,9 @@ class RawLLM:
             t["name"]: t["function"] for t in self._tools
         }
         self._build_sdk_client_and_init_model_from_llm_provider()
-        print(f"Raw LLM SDK: provider={self._provider}  model={self._model}")
+        print(f"Raw LLM SDK: provider={self._provider}  model={self._model}", end=" ")
+        if self._vision_model:
+            print(f"Vision model: {self._vision_model}")
         if self._provider == "none":
             print("\n[Raw SDK] skipped — no provider configured (set .env)")
 
@@ -327,6 +330,51 @@ class RawLLM:
             return self._gen_openai_compatible(prompt, json_mode, t0, max_tokens, temperature)
         else:
             raise ValueError(f"Unsupported provider for generation: {p!r}")
+
+    """VLM-based OCR: send a page image to a vision-capable model (Chapter 5).
+        Costs money per page, so route only hard pages here (tables, handwriting, bad scans).
+    """
+    def read_image(self, png_bytes: bytes, instruction: Any = None) -> Any:
+        import base64
+        import time
+        if not self.is_sdk_client_available:
+            raise RuntimeError("No LLM configured.")
+        system_instruction = instruction or Prompt(task=(
+                                                            "Transcribe all text in this image. "
+                                                            "Keep tables as Markdown tables. "
+                                                        ),
+                                                   output_format = "Output only the transcription."
+                                                ).get_base_system_prompt()
+        b64 = base64.b64encode(png_bytes).decode()
+        t0 = time.perf_counter()
+        if self._provider == "anthropic":
+            resp = self._client.messages.create(model=self._vision_model or self._model, max_tokens=2000,
+                                                messages=[
+                                                                {"role": "user",
+                                                                 "content": [
+                                                                                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                                                                                {"type": "text", "text": system_instruction}
+                                                                            ]
+                                                                }
+                                                        ]
+                                                )
+            text = "".join(getattr(b, "text", "") for b in resp.content)
+            return LLMResult(text, resp.usage.input_tokens, resp.usage.output_tokens,
+                             (time.perf_counter() - t0) * 1000, self._model)
+        resp = self._client.chat.completions.create(model=self._vision_model or self._model,
+                                                    messages=[
+                                                                {"role": "user",
+                                                                 "content": [
+                                                                                {"type": "text", "text": system_instruction},
+                                                                                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
+                                                                            ]
+                                                                }
+                                                            ]
+                                                    )
+        u = resp.usage
+        return LLMResult(resp.choices[0].message.content or "", u.prompt_tokens, u.completion_tokens,
+                         (time.perf_counter() - t0) * 1000, self._model)
+        
 
     
     def _gen_openai_compatible(self, prompt: Prompt, json_mode: bool = False, t0: float = time.perf_counter(), max_tokens: int | None = None, temperature: float | None = None) -> LLMResult:

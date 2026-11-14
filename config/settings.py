@@ -56,7 +56,7 @@ DEFAULT_MODELS: dict[str, str] = {
 }
 
 DEFAULT_LOCAL_TRANSFORMERS_MODEL = "microsoft/Phi-3-mini-4k-instruct" #"meta-llama/Llama-3.1-8B-Instruct"
-
+DEFAULT_VISION_LANGUAGE_MODEL = "qwen/qwen3.8-27b" #"microsoft/BLIP-2-opt-2.7b" # default vision-language model
 
 from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -101,6 +101,7 @@ class Settings:
     reasoning_effort: str = field(default_factory=lambda: _env("LLM_REASONING_EFFORT", "none"))
     openai_base_url: str = field(default_factory=lambda: _env("OPENAI_BASE_URL"))
     local_transformers_model: str = field(default_factory=lambda: _env("LOCAL_TRANSFORMER_MODEL", DEFAULT_LOCAL_TRANSFORMERS_MODEL))
+    vision_language_model: str = field(default_factory=lambda: _env("VISION_LANGUAGE_MODEL", DEFAULT_VISION_LANGUAGE_MODEL))
 
     def __post_init__(self) -> None:
         # IF default LLM model is explicitly not provided, detect it from llm provider vendor

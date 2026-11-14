@@ -5,6 +5,7 @@ import pymupdf
 from rag.rag_core.cleaning import clean_pages, normalize_unicode
 from rag.rag_core.loaders import extract_csv, extract_html, extract_pdf, tesseract_available
 from config import data_dir, banner, event_banner, step, prettify_in_table_display, single_line
+from gen_ai_core.llm.raw_llm import RawLLM
 
 """
 -----------------------------------------------
@@ -147,7 +148,7 @@ def extract_image_text_from_pdf_by_tesseract_ocr(pdf_files:list[str]=["travel_re
 
 
 def extract_tables_from_pdf(file: str = data_dir / "travel_reimbursement_policy.pdf") -> list[str]:
-    event_banner("3. Post Document Extraction: Tables stay tables")
+    event_banner("Post Document Extraction: Tables stay tables")
 
     single_line()
     step("Extracting tables from the travel reimbursement policy PDF via PyMuPDF")
@@ -165,7 +166,7 @@ def extract_tables_from_pdf(file: str = data_dir / "travel_reimbursement_policy.
 
 
 def cleanup_pages_in_pdf(file: str = data_dir / "travel_reimbursement_policy.pdf"):
-    event_banner("4. Cleaning")
+    event_banner("Cleaning")
     travel = extract_pdf(file)
     raw_text = travel[0].text
     cleaned_pages, report = clean_pages(travel)
@@ -176,6 +177,16 @@ def cleanup_pages_in_pdf(file: str = data_dir / "travel_reimbursement_policy.pdf
     print("  NFKC example:", repr("ﬂights ５ days"), "->", repr(normalize_unicode("ﬂights ５ days")))
     return cleaned_pages
 
+def extract_image_text_from_pdf_by_vlm_ocr(pdf_file: str = data_dir / "warranty_terms_scanned.pdf"):
+    event_banner("Extracting Image Text via VLM OCR")
+    vlm = RawLLM(provider="groq")
+    if vlm.is_sdk_client_available:
+        with pymupdf.open(pdf_file) as pdf:
+            png = pdf[0].get_pixmap(dpi=150).tobytes("png")
+        r = vlm.read_image(png)
+        print(r.text[:800], f"\n\n[{r.latency_ms:.0f} ms, {r.input_tokens} input tokens - compare with Tesseract's cost: 0]")
+    else:
+        print("Needs an LLM API key with a vision-capable model.")
 
 
 def pdf_doc_extraction():
@@ -185,6 +196,8 @@ def pdf_doc_extraction():
     extract_image_text_from_pdf_by_tesseract_ocr(pdf_files = ["travel_reimbursement_policy.pdf", "warranty_terms_scanned.pdf", "vendor_onboarding_mixed.pdf"])
     extract_tables_from_pdf(file = data_dir / "travel_reimbursement_policy.pdf")
     cleanup_pages_in_pdf(file = data_dir / "travel_reimbursement_policy.pdf")
+    extract_image_text_from_pdf_by_vlm_ocr(pdf_file = data_dir / "warranty_terms_scanned.pdf")
+
 
 # Run with:  uv run --active python demo_driver/demo_rag_concepts/demo_pdf_doc_extraction.py
 if __name__ == "__main__":
