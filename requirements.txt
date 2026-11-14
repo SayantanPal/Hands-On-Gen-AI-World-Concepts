@@ -19,6 +19,7 @@ cryptography
 ddgs>=9.0.0 # DuckDuckGo search API
 
 faiss-cpu>=1.8.0 # vector index experiments
+pymupdf>=1.26           # PDF text, tables, page images
 pytesseract>=0.3.10     # Python wrapper for the Tesseract OCR program (install Tesseract separately)
 pillow>=10
 fastembed>=0.7          # local embedding + reranker models (ONNX, no PyTorch needed)

@@ -1,8 +1,9 @@
 from rag.rag_core import embeddings
 from gen_ai_core import Prompt, RawLLM
-from config import data_dir
+from config import data_dir, banner, event_banner
 
 def index_src_documents_from_kb(files: list[str] = [data_dir / "refund_policy_2025.md", data_dir / "delivery_and_shipping.md"]):
+    event_banner("Index Source Document")
     chunks = []
     for f in files:
         text = open(f, encoding="utf-8").read()
@@ -16,6 +17,7 @@ def index_src_documents_from_kb(files: list[str] = [data_dir / "refund_policy_20
 
 
 def retrieve_doc_chunks_for_query(query: str, embedding_vectors, chunks, top_k:int = 3):
+    event_banner("Retrieve Document Chunks")
     import numpy as np
     embedder = embeddings.get_embedder_model()
     query_embedding_vector = embedder.embed_query(query) # same model as the documents!
@@ -31,6 +33,7 @@ def retrieve_doc_chunks_for_query(query: str, embedding_vectors, chunks, top_k:i
 
 
 def get_augmented_prompt_from_retrieved_chunks(question_query: str, top_k_chunks: list[str]):
+    event_banner("Augment Prompt with Retrieved Chunks")
     context = "\n\n".join(f"[S{r}] {chunk}" for r, chunk in enumerate(top_k_chunks, start=1))
     retrieved_context = f"Question: {question_query}\n\nContext:\n{context}\n\nAnswer:"
     return Prompt(
@@ -43,22 +46,25 @@ def get_augmented_prompt_from_retrieved_chunks(question_query: str, top_k_chunks
             )
 
 def generate_llm_ans_response_from_augmented_prompt(llm: RawLLM, augmented_system_prompt: Prompt):
+    event_banner("Generate LLM Answer Response from Augmented Prompt")
     # Here you would typically call a language model API to generate the answer
     # For demonstration purposes, we'll just return a placeholder response
     print("\n----- PROMPT SENT TO THE LLM -----\n" + str(augmented_system_prompt) + "\n----------------------------------")
     ans_response = llm.generate_response_content(augmented_system_prompt)
-    print(f"[Unhardened][Raw SDK]  {ans_response.text}\n  ({ans_response.latency_ms:.0f} ms, {ans_response.input_tokens} in / {ans_response.output_tokens} out)")
-    return f"\n----- LLM Generated answer based on the prompt:-----\n{augmented_system_prompt}\n\nLLM Response:\n{ans_response.text}"
+
+    print(f"\n----- LLM Generated answer based on the prompt:-----\n{augmented_system_prompt}\n\nLLM Response:\n{ans_response.text}")
+    print(f"({ans_response.latency_ms:.0f} ms, {ans_response.input_tokens} in / {ans_response.output_tokens} out)")
 
 
 def retrieve_augment_generate():
+    banner("RAG Demo")
     embedding_vectors, chunks = index_src_documents_from_kb(files=[data_dir / "refund_policy_2025.md", data_dir / "delivery_and_shipping.md"])
     import sys
     question_query = sys.argv[1] if len(sys.argv) > 1 else "How many days do I have to return a mobile phone?"
     top_k_chunks = retrieve_doc_chunks_for_query(question_query, embedding_vectors, chunks)
     augmented_prompt = get_augmented_prompt_from_retrieved_chunks(question_query, top_k_chunks)
-    response = generate_llm_ans_response_from_augmented_prompt(RawLLM(), augmented_prompt)
+    generate_llm_ans_response_from_augmented_prompt(RawLLM(), augmented_prompt)
 
-# Run with:  uv run --active python rag/demo_rag.py
+# Run with:  uv run --active python demo_driver/demo_rag_concepts/demo_rag.py
 if __name__ == "__main__":
     retrieve_augment_generate()
