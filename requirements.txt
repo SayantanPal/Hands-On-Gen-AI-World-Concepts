@@ -1,12 +1,32 @@
 # paste your key. Never commit .env file
 
-langchain>=1.4.0,<2.0.0
-langgraph>=1.2.0,<2.0.0
+# Install using below commands:
+# uv init --no-workspace
+# rm -rf .venv
+# uv venv --python 3.13 .venv
+# source .venv/bin/activate
+# uv python install 3.13
+# uv python pin 3.13
+# uv add --active ipykernel
+# uv add --active pip
+# uv add --active -r requirements.txt
+# uv sync --active
+# uv pip install -q -r requirements.txt
+
 requests>=2.31.0
 pandas>=2.2
 cryptography 
-pypdf
+ddgs>=9.0.0 # DuckDuckGo search API
 
+faiss-cpu>=1.8.0 # vector index experiments
+pytesseract>=0.3.10     # Python wrapper for the Tesseract OCR program (install Tesseract separately)
+pillow>=10
+fastembed>=0.7          # local embedding + reranker models (ONNX, no PyTorch needed)
+pypdf
+numpy>=1.26
+tiktoken>=0.7           # exact token counts (falls back to word counts if offline)
+wordllama>=0.3          # tiny offline embedding model, for networks that block huggingface.co
+chromadb>=1.0.0         # For Vector Store
 
 # for AWS BedRock Provider Hosted LLMs
 langchain-aws>=1.7.0,<2.0.0
@@ -25,15 +45,12 @@ langchain-groq>=1.1.0,<2.0.0
 strands-agents[openai]>=1.60.0,<2.0.0
 python-dotenv>=1.0
 
-
 # For Inbuilt Tools
 strands-agents-tools>=0.8.9,<0.9.0
 
 
 # For AWS BedRock Provider Hosted LLMs Memory via Strands SDK
 strands-agents-tools[mem0-memory]>=0.8.9,<0.9.0
-faiss-cpu>=1.8.0
-ddgs>=9.0.0
 
 
 # For Groq Provider Hosted LLMs Memory via Strands SDK
@@ -41,22 +58,16 @@ ddgs>=9.0.0
 groq>=0.30.0
 # ... and embeds them locally (Groq has no embeddings API): fastembed, wrapped as a LangChain Embeddings
 fastembed>=0.5.0
-langchain>=1.4.0,<2.0.0
 
 
 # For Both Groq & AWS Bedrock Models
 # In Groq, AgentCore Memory still needs AWS credentials, but no Bedrock model access
-boto3>=1.40.0
 langchain>=1.4.0,<2.0.0
 langchain-core>=1.6.0,<2.0.0
 langchain-groq>=1.1.0,<2.0.0
 langgraph>=1.2.0,<2.0.0
 langgraph-checkpoint-aws>=1.2.0,<2.0.0
 bedrock-agentcore>=1.24.0,<2.0.0
-
-
-# For Vector Store
-chromadb>=1.0.0
 
 # For UI
 gradio>=5.0.0
@@ -83,3 +94,17 @@ sap-ai-sdk-gen[all]==7.4.1
 
 # For OpenAI Agents SDK
 openai-agents>=0.4
+
+
+# --- production app ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+psycopg[binary]>=3.2
+pgvector>=0.3           # Python helper for the pgvector Postgres extension
+redis>=5
+rq>=1.16
+httpx>=0.27
+
+# --- tests ---
+pytest>=8

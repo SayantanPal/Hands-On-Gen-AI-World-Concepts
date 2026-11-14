@@ -41,6 +41,20 @@ dependencies = [
     "accelerate>=1.0.0",
     "strands-agents-tools[mem0-memory]>=0.8.9,<0.9.0",
     "strands-agents[openai]>=1.60.0,<2.0.0",
+    "pytesseract>=0.3.10",
+    "pillow>=10",
+    "numpy>=1.26",
+    "tiktoken>=0.7",
+    "wordllama>=0.3",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
+    "redis>=5",
+    "rq>=1.16",
+    "httpx>=0.27",
+    "pytest>=8",
 ]
 
 [build-system]
