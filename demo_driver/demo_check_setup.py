@@ -1,3 +1,15 @@
+"""
+PROJECT LAB - Check your setup  (5 minutes)
+======================================
+Run this first. 
+It checks Python, the packages, Tesseract (for OCR), the embedding model, the reranker, and your LLM key, and 
+tells you how to fix anything that is missing.
+
+    uv run --active python demo_driver/demo_check_setup.py
+
+Nothing here is required except Python + `uv add --active -r requirements.txt` or `uv pip install -r requirements.txt`.
+Everything else has a fallback, and the project lab output tells you what you will miss.
+"""
 from __future__ import annotations
 
 import platform
@@ -90,6 +102,13 @@ def check_embedding_models_setup() -> None:
                 f"{e.__class__.__name__}: {str(e)[:120]}. If huggingface.co is blocked, "
                 "set EMBEDDER=wordllama in .env (fully offline)."
             )
+        print("\n[!] Could not load the embedding model:", e.__class__.__name__, str(e)[:200])
+        print("    Most likely your network blocks huggingface.co (common on office networks).")
+        print("    Fix: run with the offline model instead, for example:")
+        print("        EMBEDDER=wordllama python labs/<lab>.py      (macOS / Linux)")
+        print("        set EMBEDDER=wordllama && python labs/<lab>.py   (Windows cmd)")
+        print("    or put EMBEDDER=wordllama in your .env file.")
+        sys.exit(1)
 
 def check_reranker_setup() -> None:
     print("\nLoading the reranker (first time downloads ~80 MB) ...")

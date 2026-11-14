@@ -5,6 +5,7 @@ def build_rctfc_system_prompt(
     *,
     role: str = "",
     task: str = "",
+    rules: str = "",
     context: str = "",
     output_format: str = "",
     constraints: list[str] | None = None,
@@ -26,13 +27,15 @@ def build_rctfc_system_prompt(
     """
     parts = []
     if role:
-        parts.append(f"[ROLE]\nYou are {role}.")
+        parts.append(f"[PERSONNA ROLE]\nYou are {role}.")
     if context:
-        parts.append(f"[CONTEXT]\n{context}")
+        parts.append(f"[BACKGROUND CONTEXT]\n{context}")
     if task:
-        parts.append(f"[TASK]\n{task}")
+        parts.append(f"[TASK INSTRUCTIONS]\n{task}")
     if output_format:
         parts.append(f"[FORMAT]\n{output_format}")
+    if rules:
+        parts.append(f"[RULES]\n{rules}")
     if constraints:
         rules = "\n".join(f"- {c}" for c in constraints)
         parts.append(f"[GUARDRAILS CONSTRAINTS]\n{rules}")

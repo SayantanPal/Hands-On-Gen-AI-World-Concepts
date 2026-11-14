@@ -59,20 +59,20 @@ DEFAULT_LOCAL_TRANSFORMERS_MODEL = "microsoft/Phi-3-mini-4k-instruct" #"meta-lla
 
 
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[0]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # try:  # python-dotenv is optional
 #     from dotenv import load_dotenv
 
-#     load_dotenv(ROOT / ".env")
+#     load_dotenv(PROJECT_ROOT / ".env")
 # except Exception:  # pragma: no cover
 #     pass
 
 # # ---- folders ----------------------------------------------------------
-data_dir: Path = ROOT / "demo_sample_data" / "unstructured_data" / "raw"
-processed_dir: Path = ROOT / "demo_sample_data" / "unstructured_data" / "processed"
-log_dir: Path = ROOT / "logs"
-reports_dir: Path = ROOT / "reports"
+data_dir: Path = PROJECT_ROOT / "demo_sample_data" / "unstructured_data" / "raw"
+processed_dir: Path = PROJECT_ROOT / "demo_sample_data" / "unstructured_data" / "processed"
+log_dir: Path = PROJECT_ROOT / "logs"
+reports_dir: Path = PROJECT_ROOT / "reports"
 
 @dataclass
 class Settings:

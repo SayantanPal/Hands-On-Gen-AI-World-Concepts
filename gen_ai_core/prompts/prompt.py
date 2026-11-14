@@ -11,6 +11,7 @@ class Prompt:
     role: str = "a helpful assistant"
     context: str = ""
     task: str = ""
+    rules: str = ""
     output_format: str = ""
     constraints: list[str] = field(default_factory=list)
     rag_context: str = ""
@@ -21,6 +22,7 @@ class Prompt:
         base_sys_prompt = build_rctfc_system_prompt(
             role=self.role,
             task=self.task,
+            rules=self.rules or None,
             context=self.context,
             output_format=self.output_format,
             constraints=self.constraints or None,
