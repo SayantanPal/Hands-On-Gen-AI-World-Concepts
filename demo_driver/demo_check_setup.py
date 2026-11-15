@@ -92,7 +92,7 @@ def check_ocr_setup() -> None:
 def check_embedding_models_setup() -> None:
     print("\nLoading the embedding model (first time downloads ~70 MB) ...")
     try:
-        from rag.rag_core.embeddings import get_embedder_model
+        from rag.rag_core.embedder import get_embedder_model
         emb = get_embedder_model()
         v = emb.embed_query("hello")
         _check(f"embedding model {emb.name} works, {emb.dim} dimensions", len(v) == emb.dim)

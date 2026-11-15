@@ -324,7 +324,7 @@ def load_corpus(data_dir: Path | None = None, cache_dir: Path | None = None, ocr
     data/processed/. The cache is reused only if the source file has not changed.
     This is the same idea as production: extract once, index many times.
     """
-    from .config import get_settings
+    from config import get_settings
 
     s = get_settings()
     data_dir = data_dir or s.data_dir

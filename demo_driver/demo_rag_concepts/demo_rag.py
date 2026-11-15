@@ -1,4 +1,4 @@
-from rag.rag_core import embeddings
+from rag.rag_core import embedder
 from gen_ai_core import Prompt, RawLLM
 from config import data_dir, banner, event_banner
 
@@ -10,7 +10,7 @@ def index_src_documents_from_kb(files: list[str] = [data_dir / "refund_policy_20
         # naive chunking: one chunk per paragraph (blank-line separated)
         chunks += [p.strip() for p in text.split("\n\n") if len(p.strip()) > 40]
 
-    embedder = embeddings.get_embedder_model()
+    embedder = embedder.get_embedder_model()
     embedding_vectors = embedder.embed_documents(chunks)           # shape: (number_of_chunks, dimensions)
     print(f"Indexed {len(chunks)} chunks with {embedder.name} -> matrix {embedding_vectors.shape}")
     return embedding_vectors, chunks
@@ -19,7 +19,7 @@ def index_src_documents_from_kb(files: list[str] = [data_dir / "refund_policy_20
 def retrieve_doc_chunks_for_query(query: str, embedding_vectors, chunks, top_k:int = 3):
     event_banner("Retrieve Document Chunks")
     import numpy as np
-    embedder = embeddings.get_embedder_model()
+    embedder = embedder.get_embedder_model()
     query_embedding_vector = embedder.embed_query(query) # same model as the documents!
     scores = embedding_vectors @ query_embedding_vector            # cosine similarity (vectors have length 1)
     top_k_retrievals = np.argsort(-scores)[:top_k]

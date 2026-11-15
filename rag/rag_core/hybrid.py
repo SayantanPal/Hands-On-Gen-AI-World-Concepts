@@ -22,7 +22,7 @@ import numpy as np
 
 from .bm25 import BM25
 from .documents import Chunk
-from .embeddings import Embedder, fingerprint
+from .embedder import Embedder, fingerprint
 from .vectorstore import InMemoryVectorStore
 
 
