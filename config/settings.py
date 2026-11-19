@@ -73,6 +73,7 @@ data_dir: Path = PROJECT_ROOT / "demo_sample_data" / "unstructured_data" / "raw"
 processed_dir: Path = PROJECT_ROOT / "demo_sample_data" / "unstructured_data" / "processed"
 log_dir: Path = PROJECT_ROOT / "logs"
 reports_dir: Path = PROJECT_ROOT / "reports"
+rag_dir: Path = PROJECT_ROOT / "rag"
 
 @dataclass
 class Settings:

@@ -12,6 +12,6 @@ def extract_text_from_html():
     html = extract_html(data_dir / "nimbu_plus_membership.html")[0].text
     print("HTML -> Markdown (menus, footer and scripts removed):\n", html[:500], "...")
 
-# Run with:  uv run --active python demo_driver/demo_rag_concepts/demo_html_doc_extraction.py
+# Run with:  uv run --active python demo_driver/demo_rag_concepts/demo_text_extraction_from_doc/demo_html_doc_extraction.py
 if __name__ == "__main__":
     extract_text_from_html()

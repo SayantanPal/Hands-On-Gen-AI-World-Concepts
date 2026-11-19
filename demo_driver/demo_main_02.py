@@ -1,6 +1,6 @@
 from gen_ai_core import HARDENED_TRAVEL, LangChainLLM, Prompt, RawLLM, TransformersLLM, build_rctfc_system_prompt
 from langchain_core.prompts import ChatPromptTemplate
-from demo_driver.demo_check_setup import check_setup
+from demo_driver.demo_check_setup_00 import check_setup
 
 
 def demo_single_interaction_using_raw_llm_sdk_unhardened_prompt() -> None:
@@ -228,26 +228,22 @@ def demo_single_interaction_using_finance_analyst_raw_llm_sdk_unhardened_prompt(
 # Run with: uv run --active python demo_driver/demo_main.py
 def demo() -> None:
     # (a) Raw layer — plain unhardened question
-    # demo_single_interaction_using_raw_llm_sdk_unhardened_prompt()
+    demo_single_interaction_using_raw_llm_sdk_unhardened_prompt()
+    print("\n\n")
 
-    # print("\n\n")
+    # (b) Hardened prompt — resists prompt injection
+    demo_single_interaction_using_raw_llm_sdk_hardened_prompt()
+    print("\n\n")
 
-    # # # (b) Hardened prompt — resists prompt injection
-    # demo_single_interaction_using_raw_llm_sdk_hardened_prompt()
-    # print("\n\n")
+    # (c) LangChain layer — composition-friendly invoke
+    demo_single_interaction_using_lc_llm_unhardened_prompt()
+    print("\n\n")
 
-    # # (c) LangChain layer — composition-friendly invoke
-    # demo_single_interaction_using_lc_llm_unhardened_prompt()
-  
-    # print("\n\n")
-
-    # # # (c) LangChain layer — resists prompt injection
-    # demo_single_interaction_using_lc_llm_hardened_prompt()
-
-    # print("\n\n")
+    # (c) LangChain layer — resists prompt injection
+    demo_single_interaction_using_lc_llm_hardened_prompt()
+    print("\n\n")
 
     demo_single_interaction_using_finance_analyst_raw_llm_sdk_unhardened_prompt()
-
     print("\n\n")
 
     

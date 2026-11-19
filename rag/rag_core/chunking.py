@@ -60,7 +60,7 @@ def count_tokens(text: str) -> int:
     return TOKENIZER.count(text)
 
 
-# ----------------------------------------------------------------------------- strategies
+# ==========================DOC CHUNKING strategies==========================
 
 
 def fixed_size(text: str, chunk_size: int = 120) -> list[str]:
@@ -68,6 +68,7 @@ def fixed_size(text: str, chunk_size: int = 120) -> list[str]:
     toks = TOKENIZER.encode(text)
     return [TOKENIZER.decode(toks[i:i + chunk_size]).strip() for i in range(0, len(toks), chunk_size)]
 
+# -----------------------------------------------------------------------------
 
 def sliding_window(text: str, chunk_size: int = 120, overlap: int = 30) -> list[str]:
     """Like fixed_size, but each chunk starts `overlap` tokens before the previous one ended."""
@@ -82,6 +83,7 @@ def sliding_window(text: str, chunk_size: int = 120, overlap: int = 30) -> list[
             break
     return out
 
+# -----------------------------------------------------------------------------
 
 DEFAULT_SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
 
@@ -132,6 +134,7 @@ def _recursive_split(text: str, size: int, seps: list[str]) -> list[str]:
         chunks.append(current)
     return chunks
 
+# -----------------------------------------------------------------------------
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 
@@ -142,7 +145,7 @@ class Section:
     body: str
 
 
-def split_sections(markdown: str) -> list[Section]:
+def _split_sections(markdown: str) -> list[Section]:
     """Split Markdown into sections by headings, remembering the heading path."""
     sections: list[Section] = []
     stack: list[tuple[int, str]] = []
@@ -179,7 +182,7 @@ def structure_aware(text: str, max_tokens: int = 250, title: str | None = None,
     * Sections longer than max_tokens are split recursively and keep their heading path.
     * If the document has no top-level heading, the document title is used as the first level.
     """
-    sections = split_sections(text)
+    sections = _split_sections(text)
     if not sections:
         return []
     has_h1 = bool(re.search(r"^#\s", text, flags=re.M))
@@ -204,6 +207,7 @@ def structure_aware(text: str, max_tokens: int = 250, title: str | None = None,
             out.append(f"{header}\n{piece}" if header else piece)
     return out
 
+# -----------------------------------------------------------------------------
 
 def split_sentences(text: str) -> list[str]:
     parts = re.split(r"(?<=[.!?।])\s+|\n+", text)
@@ -214,7 +218,8 @@ def semantic(text: str, embedder, breakpoint_percentile: float = 80, max_tokens:
              min_tokens: int = 25) -> list[str]:
     """Split where the meaning changes.
 
-    1. split into sentences   2. embed every sentence
+    1. split into sentences   
+    2. embed every sentence
     3. measure the distance between each sentence and the next
     4. a big jump (above the given percentile of all jumps) = a topic change = a new chunk
     """
@@ -240,6 +245,7 @@ def semantic(text: str, embedder, breakpoint_percentile: float = 80, max_tokens:
             chunks.extend(recursive(joined, chunk_size=max_tokens))
     return chunks
 
+# -----------------------------------------------------------------------------
 
 def llm_based(text: str, llm, max_tokens: int = 250) -> list[str]:
     """Ask an LLM to group paragraphs into topics. Falls back to structure_aware

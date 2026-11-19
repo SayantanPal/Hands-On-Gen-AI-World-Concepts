@@ -199,6 +199,6 @@ def pdf_doc_extraction():
     extract_image_text_from_pdf_by_vlm_ocr(pdf_file = data_dir / "warranty_terms_scanned.pdf")
 
 
-# Run with:  uv run --active python demo_driver/demo_rag_concepts/demo_pdf_doc_extraction.py
+# Run with:  uv run --active python demo_driver/demo_rag_concepts/demo_text_extraction_from_doc/demo_pdf_doc_extraction.py
 if __name__ == "__main__":
     pdf_doc_extraction()

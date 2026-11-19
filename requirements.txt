@@ -12,6 +12,7 @@
 # uv add --active -r requirements.txt
 # uv sync --active
 # uv pip install -q -r requirements.txt
+# brew install tesseract
 
 requests>=2.31.0
 pandas>=2.2

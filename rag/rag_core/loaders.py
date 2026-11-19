@@ -29,6 +29,8 @@ from pathlib import Path
 
 from .documents import Document, Page
 
+# -----------------FILE CONTENT EXTRACTORS INTO TXT AND IMG------------------------------
+
 # ----------------------------------------------------------------------------- OCR
 
 _TESSERACT_WARNED = False
@@ -275,7 +277,7 @@ def extract_csv(path: Path, title: str | None = None) -> list[Page]:
 
 # ----------------------------------------------------------------------------- dispatcher
 
-
+# extracts document by auto-detecing doc type and dispatching to the appropriate extractor function
 def extract_file(path: Path, ocr: bool = True, title: str | None = None) -> list[Page]:
     _require_file(path)
     suffix = path.suffix.lower()
@@ -290,7 +292,26 @@ def extract_file(path: Path, ocr: bool = True, title: str | None = None) -> list
     raise ValueError(f"Unsupported file type: {path.name}")
 
 
-def load_metadata(data_dir: Path) -> dict:
+# ---------------------------DOCUMENT LOADERS----------------------------------------- 
+
+# Metadata powers post-retrieval filters, permissions, citations and updates
+# Store with every chunk: 
+#   a)document id, 
+#   b) title, 
+#   c) section path, 
+#   d) page, 
+#   e) chunk index, 
+#   f) version, 
+#   g) effective date, 
+#   h) status (active/archived), 
+#   i) department, 
+#   j) access groups, 
+#   k) language, 
+#   l) trust level, 
+#   m) sometimes the embedding model
+# Below Method Expects metadata to be stored in _metadata.json for all files stored within the unstructured data directory > raw subfolder
+# load metadata from the _metadata.json file and return json file as dict
+def _load_metadata(data_dir: Path) -> dict:
     meta_path = data_dir / "_metadata.json"
     if not meta_path.exists():
         return {}
@@ -298,13 +319,17 @@ def load_metadata(data_dir: Path) -> dict:
     meta.pop("_about", None)
     return meta
 
-
+# Load a single document from doc file path into a Document object, optionally cleaning it and adding metadata
 def load_document(path: Path, metadata: dict | None = None, ocr: bool = True, clean: bool = True) -> Document:
     """Extract (and by default clean) one file into a Document."""
     from .cleaning import clean_pages
 
     metadata = dict(metadata or {})
+
+    # if title doesnot exist, set it based on the file stem with underscores replaced by spaces and title-cased
     metadata.setdefault("title", path.stem.replace("_", " ").title())
+
+    # overwrite other metadata value while loading file
     metadata["source_file"] = path.name
     pages = extract_file(path, ocr=ocr, title=metadata.get("title"))
     if clean:
@@ -313,9 +338,12 @@ def load_document(path: Path, metadata: dict | None = None, ocr: bool = True, cl
     metadata["extraction_methods"] = sorted({p.method for p in pages})
     metadata["num_pages"] = len(pages)
     text = "\n\n".join(p.text for p in pages if p.text)
+    # doc id resembles the name of doc file (including extension)
     return Document(doc_id=path.name, text=text, metadata=metadata, pages=pages)
 
 
+# Load all documents in the raw data directory into a list of Document objects, using caching to speed up repeated loads
+# And writing the extracted documents to the cache for future use
 def load_corpus(data_dir: Path | None = None, cache_dir: Path | None = None, ocr: bool = True,
                 clean: bool = True, use_cache: bool = True, verbose: bool = False) -> list[Document]:
     """Load every document in data/raw (with metadata from _metadata.json).
@@ -330,29 +358,56 @@ def load_corpus(data_dir: Path | None = None, cache_dir: Path | None = None, ocr
     data_dir = data_dir or s.data_dir
     cache_dir = cache_dir or s.processed_dir
     cache_dir.mkdir(parents=True, exist_ok=True)
-    all_meta = load_metadata(data_dir)
+    all_meta = _load_metadata(data_dir)
     docs: list[Document] = []
+    # for each file in the data directory, attempt to load it with caching
     for path in sorted(data_dir.iterdir()):
+        # skip all directories and hidden files i.e., files starting with _ or .
         if path.name.startswith(("_", ".")) or path.is_dir():
             continue
-        cache_file = cache_dir / f"{path.name}.json"
+
+        # A. If exists in cache
+        # If does not exist in cache
+        # generate a unique stamp/version for caching based on file last modification time, size, OCR, and cleaning options
+        # and store it in the cache file to verify later if the file has changed
+        # whenever new document version is uploaded even with same name, size and latest modified timestamp is bound to change
         stamp = f"{path.stat().st_mtime_ns}-{path.stat().st_size}-ocr{int(ocr)}-clean{int(clean)}"
+        cache_file = cache_dir / f"{path.name}.json"
+        # if the cached file with same name exists, check if its latest modification stamp/version matches the current one
         if use_cache and cache_file.exists():
-            cached = json.loads(cache_file.read_text(encoding="utf-8"))
+            cached = json.loads(cache_file.read_text(encoding="utf-8")) # cache is loaded json obj of cache file
+            # if the cached stamp matches the current stamp to infer that the file is exact same version (i.e, with same content) as last time
             if cached.get("stamp") == stamp:
-                pages = [Page(**p) for p in cached["pages"]]
-                docs.append(Document(cached["doc_id"], cached["text"], cached["metadata"], pages))
+                # then simply load the document from cache instead of re-extracting
+                docs.append(Document(cached["doc_id"], cached["text"], cached["metadata"], [Page(**p) for p in cached["pages"]]))
                 continue
+
+        # B. If does not exist in cache
+        # if cache is not used or cache is invalid, proceed to extract and cache the document by treating it as a fresh new one
         if verbose:
             print(f"  extracting {path.name} ...")
-        doc = load_document(path, all_meta.get(path.name, {}), ocr=ocr, clean=clean)
-        cache_file.write_text(json.dumps({
-            "stamp": stamp, "doc_id": doc.doc_id, "text": doc.text, "metadata": doc.metadata,
-            "pages": [p.__dict__ for p in doc.pages],
-        }, ensure_ascii=False, indent=1), encoding="utf-8")
+
+        # Load the document obj from file path
+        doc = load_document(path, metadata=all_meta.get(path.name), ocr=ocr, clean=clean)
+        # write the extracted document object to the cache for future lookup
+        cache_file.write_text(json.dumps(
+                                            {
+                                                "stamp": stamp, # needed for unique versioning of future cache lookup
+                                                "doc_id": doc.doc_id, # doc id resembles the name of doc file (including extension)
+                                                "text": doc.text,
+                                                "metadata": doc.metadata,
+                                                "pages": [p.dict() for p in doc.pages]
+                                            }, 
+                                            ensure_ascii=False, indent=1
+                                        ), 
+                                encoding="utf-8"
+                            )
         docs.append(doc)
+        
     return docs
 
+
+# ---------------------------DOCUMENT LOADERS----------------------------------------- 
 
 def strip_markdown(text: str) -> str:
     """Remove Markdown symbols for display (not used for indexing)."""

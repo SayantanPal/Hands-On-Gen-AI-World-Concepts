@@ -12,6 +12,6 @@ def extract_text_from_csv():
     csv_rows = extract_csv(data_dir / "product_catalog.csv", "Product Catalog")[0].text.split("\n")[2:10]
     print("\n".join(csv_rows))
 
-# Run with:  uv run --active python demo_driver/demo_rag_concepts/demo_csv_doc_extraction.py
+# Run with:  uv run --active python demo_driver/demo_rag_concepts/demo_text_extraction_from_doc/demo_csv_doc_extraction.py
 if __name__ == "__main__":
     extract_text_from_csv()
